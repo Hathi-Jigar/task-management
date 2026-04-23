@@ -443,6 +443,13 @@ function renderTaskCard(task, opts = {}) {
   const recurringHTML = task.recurring && task.recurring !== 'none'
     ? `<span class="task-recurring">🔁 ${task.recurring}</span>` : '';
 
+  const notesHTML = task.notes
+    ? `<div class="task-notes-wrap">
+         <div class="task-notes">${escapeHTML(task.notes)}</div>
+         <button class="task-note-edit-btn" title="Edit note" aria-label="Edit note">✏️</button>
+       </div>`
+    : `<button class="task-add-note-btn" title="Add note">📝 Add note</button>`;
+
   card.innerHTML = `
     ${checkHTML}
     <div class="task-body">
@@ -452,7 +459,7 @@ function renderTaskCard(task, opts = {}) {
         ${tagsHTML}
         ${recurringHTML}
       </div>
-      ${task.notes ? `<div class="task-notes">${escapeHTML(task.notes)}</div>` : ''}
+      ${notesHTML}
     </div>
     <div class="task-actions">
       <button class="task-action-btn edit-btn" title="Edit">✏️</button>
@@ -469,9 +476,98 @@ function renderTaskCard(task, opts = {}) {
   card.querySelector('.del-btn').addEventListener('click', (ev) => { ev.stopPropagation(); deleteTaskFlow(task, card); });
 
   const notesEl = card.querySelector('.task-notes');
-  if (notesEl) notesEl.addEventListener('click', () => notesEl.classList.toggle('expanded'));
+  if (notesEl) notesEl.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    notesEl.classList.toggle('expanded');
+  });
+
+  const noteEditBtn = card.querySelector('.task-note-edit-btn');
+  if (noteEditBtn) noteEditBtn.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    enterInlineNoteEdit(card, task);
+  });
+
+  const addNoteBtn = card.querySelector('.task-add-note-btn');
+  if (addNoteBtn) addNoteBtn.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    enterInlineNoteEdit(card, task);
+  });
 
   return card;
+}
+
+function enterInlineNoteEdit(card, task) {
+  const body = card.querySelector('.task-body');
+  if (!body || card.querySelector('.task-notes-edit')) return;
+
+  const existing = task.notes || '';
+  const wrap = card.querySelector('.task-notes-wrap');
+  const addBtn = card.querySelector('.task-add-note-btn');
+
+  const editWrap = el('div', 'task-notes-edit-wrap');
+  const ta = document.createElement('textarea');
+  ta.className = 'task-notes-edit';
+  ta.rows = 3;
+  ta.value = existing;
+  ta.placeholder = 'Add a note… (tap outside to save, Esc to cancel)';
+  const hint = el('div', 'task-notes-edit-hint', '<span class="note-save-status">📝 Editing…</span>');
+  editWrap.appendChild(ta);
+  editWrap.appendChild(hint);
+
+  if (wrap) wrap.replaceWith(editWrap);
+  else if (addBtn) addBtn.replaceWith(editWrap);
+  else body.appendChild(editWrap);
+
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+
+  let done = false;
+  let cancelled = false;
+
+  const finish = async () => {
+    if (done) return;
+    done = true;
+    const newNotes = cancelled ? existing : ta.value.trim();
+    if (newNotes === existing) {
+      renderAll();
+      return;
+    }
+    ta.disabled = true;
+    hint.querySelector('.note-save-status').textContent = '⏳ Saving…';
+    try {
+      const updated = await updateTask(task.id, {
+        title: task.title,
+        deadline: task.deadline,
+        recurring: task.recurring,
+        notes: newNotes,
+        tags: task.tags
+      });
+      const idx = S.tasks.findIndex(t => t.id === task.id);
+      if (idx >= 0 && updated) S.tasks[idx] = parseTask(updated);
+      const rect = ta.getBoundingClientRect();
+      sparkle(rect.left + rect.width / 2, rect.top + 8);
+      playSound('add');
+      renderAll();
+      refresh().catch(() => {});
+    } catch (e) {
+      toast('Could not save note: ' + e.message, 'error');
+      done = false;
+      ta.disabled = false;
+      hint.querySelector('.note-save-status').textContent = '⚠️ Retry';
+    }
+  };
+
+  ta.addEventListener('blur', finish);
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelled = true;
+      ta.blur();
+    } else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      ta.blur();
+    }
+  });
 }
 
 /* ========== UI: RENDER TABS ========== */
@@ -781,12 +877,8 @@ async function doReopenTask() {
   $('#reopenModal').classList.add('hidden');
 
   const xpLoss = computeCloseXP(task);
-  // Fire the -XP float in the center of the viewport so it's always visible,
-  // regardless of which tab was active or whether the source card is still in the DOM.
-  const cx = window.innerWidth / 2;
-  const cy = window.innerHeight * 0.4;
-  floatLossAt(`−${xpLoss} XP`, cx, cy);
-  // Small red "damage" shake of the hero HP bar to emphasise the loss
+  // -XP float in center of viewport — always visible
+  floatLossAt(`−${xpLoss} XP`, window.innerWidth / 2, window.innerHeight * 0.4);
   const hpBar = document.querySelector('.hp-bar');
   if (hpBar) {
     hpBar.classList.add('hp-hit');
@@ -794,32 +886,83 @@ async function doReopenTask() {
   }
   playSound('add');
 
+  // Find the card and fly it toward the "All" tab button
+  const sourceCard = document.querySelector(`.task[data-task-id="${task.id}"]`);
+  const flight = sourceCard ? flyCardToAllTab(sourceCard) : Promise.resolve();
+
   try {
     const reopened = await reopenTaskApi(task.id);
     const idx = S.tasks.findIndex(t => t.id === task.id);
     if (idx >= 0 && reopened) S.tasks[idx] = parseTask(reopened);
     S.stats = computeStats(S.tasks);
+
+    // Pulse the All tab to show where the quest landed
+    pulseAllTab();
+
+    await flight;
     renderAll();
-
-    // Auto-switch to All tab so the reopened quest is visible
-    switchTab('all');
-    // Highlight the reopened card briefly
-    setTimeout(() => {
-      const card = document.querySelector(`.task[data-task-id="${task.id}"]`);
-      if (card) {
-        card.classList.add('just-reopened');
-        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        setTimeout(() => card.classList.remove('just-reopened'), 1800);
-      }
-    }, 50);
-
-    toast(`Quest reopened • −${xpLoss} XP`, 'error');
+    toast(`↩️ Quest reopened → All tab  •  −${xpLoss} XP`, 'error');
     refresh().catch(() => {});
   } catch (e) {
     toast('Could not reopen: ' + e.message, 'error');
   } finally {
     btn.disabled = false;
   }
+}
+
+function flyCardToAllTab(card) {
+  return new Promise(resolve => {
+    const allTab = document.querySelector('.tab[data-tab="all"]');
+    if (!allTab) { resolve(); return; }
+    const cardRect = card.getBoundingClientRect();
+    const tabRect = allTab.getBoundingClientRect();
+    const dx = (tabRect.left + tabRect.width / 2) - (cardRect.left + cardRect.width / 2);
+    const dy = (tabRect.top + tabRect.height / 2) - (cardRect.top + cardRect.height / 2);
+
+    const clone = card.cloneNode(true);
+    clone.style.position = 'fixed';
+    clone.style.left = cardRect.left + 'px';
+    clone.style.top = cardRect.top + 'px';
+    clone.style.width = cardRect.width + 'px';
+    clone.style.margin = '0';
+    clone.style.zIndex = '350';
+    clone.style.pointerEvents = 'none';
+    clone.style.transition = 'transform 0.85s cubic-bezier(0.65, 0, 0.35, 1), opacity 0.85s';
+    clone.style.transformOrigin = 'center center';
+    document.body.appendChild(clone);
+
+    // Hide original
+    card.style.visibility = 'hidden';
+
+    // Spawn a few sparkles along the path
+    const steps = 4;
+    for (let i = 0; i < steps; i++) {
+      setTimeout(() => {
+        const t = (i + 1) / (steps + 1);
+        sparkle(
+          cardRect.left + cardRect.width / 2 + dx * t,
+          cardRect.top + cardRect.height / 2 + dy * t
+        );
+      }, 80 + i * 140);
+    }
+
+    requestAnimationFrame(() => {
+      clone.style.transform = `translate(${dx}px, ${dy}px) scale(0.08) rotate(22deg)`;
+      clone.style.opacity = '0';
+    });
+
+    setTimeout(() => {
+      clone.remove();
+      resolve();
+    }, 900);
+  });
+}
+
+function pulseAllTab() {
+  const allTab = document.querySelector('.tab[data-tab="all"]');
+  if (!allTab) return;
+  allTab.classList.add('tab-receiving');
+  setTimeout(() => allTab.classList.remove('tab-receiving'), 900);
 }
 
 async function deleteTaskFlow(task, card) {
