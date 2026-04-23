@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=VT323&display=swap" />
 <link rel="stylesheet" href="style.css" />
 <script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 <!-- ================= LOGIN ================= -->
@@ -76,33 +77,64 @@
     </div>
   </header>
 
-  <!-- TABS -->
-  <nav class="tabs">
-    <button class="tab active" data-tab="all">📋 All</button>
-    <button class="tab" data-tab="done">✅ Done</button>
-    <button class="tab" data-tab="badges">🏆 Badges</button>
-  </nav>
+  <!-- MAIN GRID: tabs/content on left, sidebar on right -->
+  <div class="main-grid">
+    <div class="main-col">
+      <!-- TABS -->
+      <nav class="tabs">
+        <button class="tab active" data-tab="all">📋 All</button>
+        <button class="tab" data-tab="done">✅ Done</button>
+        <button class="tab" data-tab="badges">🏆 Badges</button>
+      </nav>
 
-  <!-- CONTENT -->
-  <main class="content">
-    <section id="tab-all" class="tab-content active">
-      <div class="tag-filter" id="tagFilter"></div>
-      <div id="allList" class="list"></div>
-      <div id="allEmpty" class="empty hidden">
-        <div class="empty-icon">🌤️</div>
-        <div class="empty-title">No open quests!</div>
-        <div class="empty-sub">Tap + to scribe one and earn XP.</div>
-      </div>
-    </section>
+      <!-- CONTENT -->
+      <main class="content">
+        <section id="tab-all" class="tab-content active">
+          <div class="tag-filter" id="tagFilter"></div>
+          <div id="allList" class="list"></div>
+          <div id="allEmpty" class="empty hidden">
+            <div class="empty-icon">🌤️</div>
+            <div class="empty-title">No open quests!</div>
+            <div class="empty-sub">Tap + to scribe one and earn XP.</div>
+          </div>
+        </section>
 
-    <section id="tab-done" class="tab-content">
-      <div id="doneList" class="list"></div>
-    </section>
+        <section id="tab-done" class="tab-content">
+          <div id="doneList" class="list"></div>
+        </section>
 
-    <section id="tab-badges" class="tab-content">
-      <div id="badgesGrid" class="badges-grid"></div>
-    </section>
-  </main>
+        <section id="tab-badges" class="tab-content">
+          <div id="badgesGrid" class="badges-grid"></div>
+        </section>
+      </main>
+    </div>
+
+    <!-- SIDEBAR (desktop: right column; mobile: stacks above content) -->
+    <aside class="sidebar">
+      <!-- MEETINGS PANEL -->
+      <section class="side-panel" id="meetingsPanel">
+        <header class="side-panel-header">
+          <span class="side-panel-icon">🎥</span>
+          <span class="side-panel-title">MEETINGS</span>
+          <button class="side-panel-action" id="gcalRefreshBtn" title="Refresh meetings" aria-label="Refresh meetings">🔄</button>
+        </header>
+        <div id="meetingsConnectCta" class="side-panel-body">
+          <div class="gcal-cta">
+            <div class="gcal-cta-icon">📅</div>
+            <div class="gcal-cta-text">Connect Google Calendar to see today's meetings with one-tap join links.</div>
+            <button class="btn btn-primary btn-small" id="gcalConnectBtn">🔗 Connect Calendar</button>
+          </div>
+        </div>
+        <div id="meetingsList" class="side-panel-body meetings-list hidden"></div>
+        <div id="meetingsEmpty" class="side-panel-body hidden">
+          <div class="gcal-cta">
+            <div class="gcal-cta-icon">🌤️</div>
+            <div class="gcal-cta-text">No meetings today or tomorrow.</div>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </div>
 
   <!-- FAB -->
   <button id="fab" class="fab" title="Add Quest" aria-label="Add Quest">
@@ -190,6 +222,7 @@
       <button class="btn btn-ghost" id="changeNameBtn">👤 Change Name</button>
       <button class="btn btn-ghost" id="soundToggleBtn">🔊 Sound: On</button>
       <button class="btn btn-ghost" id="tagManagerOpenBtn">🏷️ Manage Tags</button>
+      <button class="btn btn-ghost" id="gcalMenuBtn">📅 Connect Calendar</button>
       <button class="btn btn-ghost" id="installBtn">📲 Install as App</button>
       <button class="btn btn-ghost danger" id="logoutBtn">🚪 Logout</button>
     </div>

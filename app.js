@@ -14,6 +14,12 @@ const CONFIG = {
   tz: 'Asia/Kolkata'
 };
 
+const GCAL_CONFIG = {
+  clientId: '458708599728-9lmsjmkq0gqcof38uopgnsnse5l5hceg.apps.googleusercontent.com',
+  scope: 'https://www.googleapis.com/auth/calendar.readonly',
+  lookAheadDays: 2
+};
+
 const BADGES = [
   { id: 'first_quest',    icon: '🎯', name: 'First Quest',      desc: 'Add your first quest' },
   { id: 'first_victory',  icon: '⚔️', name: 'First Victory',    desc: 'Close your first quest' },
@@ -55,7 +61,12 @@ const S = {
   prevLevel: 1,
   prevBadges: new Set(),
   lastRefreshAt: 0,
-  autoRefreshTimer: null
+  autoRefreshTimer: null,
+  gcalToken: localStorage.getItem('gcalToken') || null,
+  gcalTokenExpiry: parseInt(localStorage.getItem('gcalTokenExpiry') || '0', 10),
+  gcalStatus: 'disconnected',
+  gcalMeetings: [],
+  gcalTimer: null
 };
 
 const AUTO_REFRESH_INTERVAL_MS = 90_000; // background poll while visible
@@ -1174,6 +1185,7 @@ async function loadEverything() {
   $('#loadingScreen').classList.add('gone');
   setTimeout(() => $('#loadingScreen').style.display = 'none', 400);
   startAutoRefresh();
+  initGcal().catch(() => {});
 }
 
 async function userRefresh({ silent = false } = {}) {
@@ -1347,6 +1359,23 @@ function wireEvents() {
   });
 
   $('#refreshHeroBtn').addEventListener('click', () => userRefresh({ silent: false }));
+
+  $('#gcalConnectBtn')?.addEventListener('click', async () => {
+    const btn = $('#gcalConnectBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Connecting…';
+    await connectGcal();
+    btn.disabled = false;
+    btn.textContent = '🔗 Connect Calendar';
+    if (S.gcalStatus === 'connected') startGcalPolling();
+  });
+  $('#gcalRefreshBtn')?.addEventListener('click', async () => {
+    if (S.gcalStatus !== 'connected') { await connectGcal(); return; }
+    const btn = $('#gcalRefreshBtn');
+    btn.classList.add('spinning');
+    await refreshMeetings();
+    setTimeout(() => btn.classList.remove('spinning'), 800);
+  });
   $('#refreshBtn').addEventListener('click', () => { closeModals(); userRefresh({ silent: false }); });
 
   document.addEventListener('visibilitychange', () => {
@@ -1354,16 +1383,18 @@ function wireEvents() {
       if (!S.lastRefreshAt || Date.now() - S.lastRefreshAt > STALE_THRESHOLD_MS) {
         userRefresh({ silent: true }).catch(() => {});
       }
+      if (S.gcalStatus === 'connected') refreshMeetings().catch(() => {});
     }
   });
   window.addEventListener('focus', () => {
     if (S.token && (!S.lastRefreshAt || Date.now() - S.lastRefreshAt > STALE_THRESHOLD_MS)) {
       userRefresh({ silent: true }).catch(() => {});
     }
+    if (S.gcalStatus === 'connected') refreshMeetings().catch(() => {});
   });
   window.addEventListener('pageshow', (e) => {
-    // iOS bfcache: page restored from back-forward cache — always refresh
     if (e.persisted && S.token) userRefresh({ silent: true }).catch(() => {});
+    if (e.persisted && S.gcalStatus === 'connected') refreshMeetings().catch(() => {});
   });
   $('#soundToggleBtn').addEventListener('click', () => {
     S.soundOn = !S.soundOn;
@@ -1371,8 +1402,18 @@ function wireEvents() {
     $('#soundToggleBtn').textContent = `🔊 Sound: ${S.soundOn ? 'On' : 'Off'}`;
   });
   $('#soundToggleBtn').textContent = `🔊 Sound: ${S.soundOn ? 'On' : 'Off'}`;
+  refreshGcalMenuLabel();
   $('#tagManagerOpenBtn').addEventListener('click', () => { closeModals(); openTagManager(); });
   $('#changeNameBtn').addEventListener('click', () => { closeModals(); changeName(); });
+  $('#gcalMenuBtn').addEventListener('click', async () => {
+    closeModals();
+    if (S.gcalStatus === 'connected') {
+      if (confirm('Disconnect Google Calendar? You can reconnect anytime.')) disconnectGcal();
+    } else {
+      await connectGcal();
+      if (S.gcalStatus === 'connected') startGcalPolling();
+    }
+  });
   $('#installBtn').addEventListener('click', installApp);
   $('#logoutBtn').addEventListener('click', logout);
   $('#levelUpClose').addEventListener('click', () => $('#levelUpModal').classList.add('hidden'));
@@ -1383,6 +1424,244 @@ function wireEvents() {
   $$('.modal').forEach(m => {
     m.addEventListener('click', (e) => { if (e.target === m) closeModals(); });
   });
+}
+
+/* ========== GOOGLE CALENDAR ========== */
+let gcalTokenClient = null;
+const GCAL_MEETINGS_POLL_MS = 5 * 60 * 1000;
+
+function gisReady() {
+  return typeof google !== 'undefined' && google.accounts && google.accounts.oauth2;
+}
+
+function waitForGis(timeoutMs = 8000) {
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    (function poll() {
+      if (gisReady()) resolve();
+      else if (Date.now() - start > timeoutMs) reject(new Error('Google Identity Services failed to load'));
+      else setTimeout(poll, 100);
+    })();
+  });
+}
+
+function ensureGcalClient() {
+  if (gcalTokenClient || !gisReady()) return gcalTokenClient;
+  gcalTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GCAL_CONFIG.clientId,
+    scope: GCAL_CONFIG.scope,
+    callback: () => {},
+    error_callback: () => {}
+  });
+  return gcalTokenClient;
+}
+
+function gcalTokenValid() {
+  return S.gcalToken && S.gcalTokenExpiry > Date.now() + 60000;
+}
+
+async function connectGcal({ silent = false } = {}) {
+  try {
+    await waitForGis();
+  } catch (e) {
+    toast('Google login SDK blocked. Check your network.', 'error');
+    return;
+  }
+  ensureGcalClient();
+  if (!gcalTokenClient) {
+    toast('Could not initialize Google client', 'error');
+    return;
+  }
+  return new Promise((resolve) => {
+    gcalTokenClient.callback = async (resp) => {
+      if (resp.error) {
+        if (!silent) toast('Calendar connect failed: ' + resp.error, 'error');
+        resolve(false);
+        return;
+      }
+      S.gcalToken = resp.access_token;
+      S.gcalTokenExpiry = Date.now() + (resp.expires_in || 3600) * 1000;
+      S.gcalStatus = 'connected';
+      localStorage.setItem('gcalToken', S.gcalToken);
+      localStorage.setItem('gcalTokenExpiry', String(S.gcalTokenExpiry));
+      await refreshMeetings();
+      if (!silent) toast('📅 Calendar connected ✓', 'success');
+      resolve(true);
+    };
+    gcalTokenClient.error_callback = (err) => {
+      if (!silent) toast('Calendar auth cancelled', 'error');
+      resolve(false);
+    };
+    gcalTokenClient.requestAccessToken({ prompt: silent ? '' : 'consent' });
+  });
+}
+
+function disconnectGcal() {
+  if (S.gcalToken && gisReady() && google.accounts.oauth2.revoke) {
+    try { google.accounts.oauth2.revoke(S.gcalToken, () => {}); } catch {}
+  }
+  localStorage.removeItem('gcalToken');
+  localStorage.removeItem('gcalTokenExpiry');
+  S.gcalToken = null;
+  S.gcalTokenExpiry = 0;
+  S.gcalStatus = 'disconnected';
+  S.gcalMeetings = [];
+  stopGcalPolling();
+  renderMeetings();
+  toast('Calendar disconnected', 'success');
+}
+
+async function refreshMeetings() {
+  if (!S.gcalToken) { renderMeetings(); return; }
+  if (!gcalTokenValid()) {
+    const ok = await connectGcal({ silent: true });
+    if (!ok) { renderMeetings(); return; }
+  }
+  try {
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const end = new Date(start); end.setDate(end.getDate() + GCAL_CONFIG.lookAheadDays);
+    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(start.toISOString())}&timeMax=${encodeURIComponent(end.toISOString())}&singleEvents=true&orderBy=startTime&maxResults=50&showDeleted=false`;
+    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${S.gcalToken}` } });
+    if (res.status === 401) {
+      S.gcalToken = null;
+      S.gcalStatus = 'disconnected';
+      localStorage.removeItem('gcalToken');
+      renderMeetings();
+      return;
+    }
+    if (!res.ok) throw new Error(`GCal ${res.status}: ${await res.text()}`);
+    const data = await res.json();
+    S.gcalMeetings = (data.items || []).filter(e => e.status !== 'cancelled');
+    S.gcalStatus = 'connected';
+  } catch (e) {
+    console.warn('GCal fetch failed', e);
+  }
+  renderMeetings();
+}
+
+function startGcalPolling() {
+  stopGcalPolling();
+  S.gcalTimer = setInterval(() => {
+    if (document.visibilityState === 'visible' && S.gcalToken) {
+      refreshMeetings().catch(() => {});
+    }
+  }, GCAL_MEETINGS_POLL_MS);
+}
+
+function stopGcalPolling() {
+  if (S.gcalTimer) { clearInterval(S.gcalTimer); S.gcalTimer = null; }
+}
+
+function getMeetingLink(event) {
+  if (event.hangoutLink) return { url: event.hangoutLink, type: 'meet', label: 'Meet' };
+  const entries = event.conferenceData && event.conferenceData.entryPoints;
+  if (entries && entries.length) {
+    const video = entries.find(p => p.entryPointType === 'video');
+    if (video && video.uri) return { url: video.uri, type: 'meet', label: 'Meet' };
+  }
+  const text = [event.location || '', event.description || ''].join(' ');
+  const patterns = [
+    { re: /https?:\/\/[^\s<>"']*zoom\.us\/[^\s<>"']+/i, type: 'zoom', label: 'Zoom' },
+    { re: /https?:\/\/(?:teams\.microsoft\.com|teams\.live\.com)\/[^\s<>"']+/i, type: 'teams', label: 'Teams' },
+    { re: /https?:\/\/meet\.google\.com\/[^\s<>"']+/i, type: 'meet', label: 'Meet' }
+  ];
+  for (const p of patterns) {
+    const m = text.match(p.re);
+    if (m) return { url: m[0].replace(/[.,;)]+$/, ''), type: p.type, label: p.label };
+  }
+  return null;
+}
+
+function renderMeetings() {
+  const list = $('#meetingsList');
+  const empty = $('#meetingsEmpty');
+  const cta = $('#meetingsConnectCta');
+  if (!list) return;
+
+  if (S.gcalStatus !== 'connected') {
+    list.classList.add('hidden');
+    empty.classList.add('hidden');
+    cta.classList.remove('hidden');
+    return;
+  }
+
+  cta.classList.add('hidden');
+  list.innerHTML = '';
+  const events = S.gcalMeetings.filter(e => (e.start && (e.start.dateTime || e.start.date)));
+  if (!events.length) {
+    list.classList.add('hidden');
+    empty.classList.remove('hidden');
+    return;
+  }
+  list.classList.remove('hidden');
+  empty.classList.add('hidden');
+
+  const now = Date.now();
+  const todayKey = new Date().toDateString();
+  const tomorrowKey = new Date(Date.now() + 86400000).toDateString();
+  let currentSection = null;
+
+  events.forEach(ev => {
+    const startRaw = ev.start.dateTime || ev.start.date;
+    const endRaw = (ev.end && (ev.end.dateTime || ev.end.date)) || startRaw;
+    const startD = new Date(startRaw);
+    const endD = new Date(endRaw);
+    const dayKey = startD.toDateString();
+    const sectionLabel = dayKey === todayKey
+      ? 'TODAY'
+      : dayKey === tomorrowKey
+        ? 'TOMORROW'
+        : startD.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase();
+    if (sectionLabel !== currentSection) {
+      currentSection = sectionLabel;
+      const h = el('div', 'meetings-section-header', sectionLabel);
+      list.appendChild(h);
+    }
+
+    const isAllDay = !ev.start.dateTime;
+    const isPast = endD.getTime() < now;
+    const isActive = startD.getTime() <= now && endD.getTime() > now;
+    const timeStr = isAllDay
+      ? 'All day'
+      : `${startD.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – ${endD.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    const link = getMeetingLink(ev);
+    const attendees = (ev.attendees || []).filter(a => !a.resource).length;
+
+    const card = el('div', `meeting-card ${isPast ? 'past' : ''} ${isActive ? 'active' : ''}`);
+    card.innerHTML = `
+      <div class="meeting-time">
+        ${escapeHTML(timeStr)}
+        ${isActive ? '<span style="color:#22c55e;font-weight:800">· 🔴 LIVE</span>' : ''}
+        ${isPast && !isActive ? '<span style="opacity:0.6">· ✓</span>' : ''}
+      </div>
+      <div class="meeting-title">${escapeHTML(ev.summary || '(no title)')}</div>
+      ${attendees > 0 ? `<div class="meeting-attendees">👥 ${attendees} attendee${attendees > 1 ? 's' : ''}</div>` : ''}
+      ${link && !isPast ? `<a href="${escapeHTML(link.url)}" target="_blank" rel="noopener" class="meeting-join-btn meeting-join-${link.type}">▶ Join ${escapeHTML(link.label)}</a>` : ''}
+    `;
+    list.appendChild(card);
+  });
+}
+
+async function initGcal() {
+  if (S.gcalToken && gcalTokenValid()) {
+    S.gcalStatus = 'connected';
+    renderMeetings();
+    refreshMeetings().catch(() => {});
+    startGcalPolling();
+  } else if (S.gcalToken) {
+    S.gcalToken = null;
+    localStorage.removeItem('gcalToken');
+    renderMeetings();
+  } else {
+    renderMeetings();
+  }
+  refreshGcalMenuLabel();
+}
+
+function refreshGcalMenuLabel() {
+  const btn = document.getElementById('gcalMenuBtn');
+  if (!btn) return;
+  btn.textContent = S.gcalStatus === 'connected' ? '📅 Disconnect Calendar' : '📅 Connect Calendar';
 }
 
 /* ========== INIT ========== */
