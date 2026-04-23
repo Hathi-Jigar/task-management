@@ -109,14 +109,34 @@ function parseICalDate(value, tzid) {
   if (!m) return null;
   const [, y, mo, d, hh, mm, ss, z] = m;
   if (hh === undefined) {
-    // Date-only (all-day)
     return { date: new Date(Date.UTC(+y, +mo - 1, +d)), allDay: true };
   }
   if (z === 'Z') {
     return { date: new Date(Date.UTC(+y, +mo - 1, +d, +hh, +mm, +ss || 0)), allDay: false };
   }
-  // Floating or TZID-bound. If TZID is Asia/Kolkata, adjust; else treat as IST (safe for digiqc.com users).
-  const offsetMin = tzid && tzid !== 'Asia/Kolkata' ? 0 : 330; // 5h30m for IST
+  // Floating or TZID-bound.
+  // Heuristic: apply IST offset if TZID is missing or looks Indian; else try Intl resolver, else UTC.
+  let offsetMin = 330;
+  if (tzid) {
+    const istTzids = ['Asia/Kolkata', 'Asia/Calcutta', 'IST', 'India Standard Time'];
+    if (istTzids.includes(tzid)) {
+      offsetMin = 330;
+    } else {
+      // Try resolving via Intl — compute offset for this zone at the given local time
+      try {
+        const guess = new Date(Date.UTC(+y, +mo - 1, +d, +hh, +mm, +ss || 0));
+        const parts = new Intl.DateTimeFormat('en-US', {
+          timeZone: tzid,
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+        }).formatToParts(guess).reduce((a, p) => (a[p.type] = p.value, a), {});
+        const localAsUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+        offsetMin = (guess.getTime() - localAsUtc) / 60000;
+      } catch (e) {
+        offsetMin = 0; // fallback: treat as UTC
+      }
+    }
+  }
   const utcMs = Date.UTC(+y, +mo - 1, +d, +hh, +mm, +ss || 0) - offsetMin * 60 * 1000;
   return { date: new Date(utcMs), allDay: false };
 }
@@ -177,19 +197,37 @@ function parseIcsEvents(ics) {
 }
 
 async function fetchTodayMeetings() {
-  if (!GCAL_ICAL_URL) return null;
+  if (!GCAL_ICAL_URL) {
+    console.log('[meetings] GCAL_ICAL_URL not set — skipping meetings section');
+    return null;
+  }
   try {
+    console.log('[meetings] Fetching iCal feed…');
     const res = await fetch(GCAL_ICAL_URL);
-    if (!res.ok) { console.warn('iCal fetch', res.status); return null; }
+    console.log('[meetings] iCal HTTP status:', res.status);
+    if (!res.ok) { console.warn('[meetings] iCal non-OK response'); return null; }
     const text = await res.text();
+    console.log('[meetings] iCal body length:', text.length, 'chars');
     const events = parseIcsEvents(text);
+    console.log('[meetings] Parsed events total:', events.length);
     const todayKey = istParts(new Date()).dateKey;
+    console.log('[meetings] Today (IST):', todayKey);
     const todayEvents = events
       .filter(e => !e.allDay && istParts(e.start).dateKey === todayKey)
       .sort((a, b) => a.start - b.start);
+    console.log('[meetings] Today events found:', todayEvents.length);
+    if (todayEvents.length === 0 && events.length > 0) {
+      // Log a sample of what dates we did find, to help diagnose
+      const sample = events.slice(0, 5).map(e => ({
+        summary: e.summary,
+        start: e.start.toISOString(),
+        istDate: istParts(e.start).dateKey
+      }));
+      console.log('[meetings] Sample parsed events (first 5):', JSON.stringify(sample, null, 2));
+    }
     return todayEvents;
   } catch (e) {
-    console.warn('Meetings fetch failed', e);
+    console.warn('[meetings] fetch/parse failed:', e.message);
     return null;
   }
 }
