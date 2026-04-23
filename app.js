@@ -66,7 +66,10 @@ const S = {
   gcalTokenExpiry: parseInt(localStorage.getItem('gcalTokenExpiry') || '0', 10),
   gcalStatus: 'disconnected',
   gcalMeetings: [],
-  gcalTimer: null
+  gcalTimer: null,
+  gcalCountdownTimer: null,
+  gcalRange: localStorage.getItem('gcalRange') || 'upcoming',
+  expandedMeetingIds: new Set()
 };
 
 const AUTO_REFRESH_INTERVAL_MS = 90_000; // background poll while visible
@@ -1376,6 +1379,13 @@ function wireEvents() {
     await refreshMeetings();
     setTimeout(() => btn.classList.remove('spinning'), 800);
   });
+  document.querySelectorAll('.gcal-range-btn').forEach(btn => {
+    btn.addEventListener('click', () => setGcalRange(btn.dataset.range));
+  });
+  // Mark default active range
+  document.querySelectorAll('.gcal-range-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.range === S.gcalRange);
+  });
   $('#refreshBtn').addEventListener('click', () => { closeModals(); userRefresh({ silent: false }); });
 
   document.addEventListener('visibilitychange', () => {
@@ -1511,6 +1521,23 @@ function disconnectGcal() {
   toast('Calendar disconnected', 'success');
 }
 
+function getGcalRangeBounds() {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const r = S.gcalRange;
+  if (r === 'past') {
+    const start = new Date(today); start.setDate(start.getDate() - 7);
+    return { start, end: today, label: 'Last 7 days' };
+  }
+  if (r === 'week') {
+    const start = new Date(today); start.setDate(start.getDate() + 2);
+    const end = new Date(today); end.setDate(end.getDate() + 8);
+    return { start, end, label: 'Day after tomorrow → next week' };
+  }
+  // upcoming default
+  const end = new Date(today); end.setDate(end.getDate() + 2);
+  return { start: today, end, label: 'Today + Tomorrow' };
+}
+
 async function refreshMeetings() {
   if (!S.gcalToken) { renderMeetings(); return; }
   if (!gcalTokenValid()) {
@@ -1518,9 +1545,8 @@ async function refreshMeetings() {
     if (!ok) { renderMeetings(); return; }
   }
   try {
-    const start = new Date(); start.setHours(0, 0, 0, 0);
-    const end = new Date(start); end.setDate(end.getDate() + GCAL_CONFIG.lookAheadDays);
-    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(start.toISOString())}&timeMax=${encodeURIComponent(end.toISOString())}&singleEvents=true&orderBy=startTime&maxResults=50&showDeleted=false`;
+    const { start, end } = getGcalRangeBounds();
+    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(start.toISOString())}&timeMax=${encodeURIComponent(end.toISOString())}&singleEvents=true&orderBy=startTime&maxResults=100&showDeleted=false`;
     const res = await fetch(url, { headers: { 'Authorization': `Bearer ${S.gcalToken}` } });
     if (res.status === 401) {
       S.gcalToken = null;
@@ -1537,6 +1563,16 @@ async function refreshMeetings() {
     console.warn('GCal fetch failed', e);
   }
   renderMeetings();
+  updateGcalCountdown();
+}
+
+function setGcalRange(range) {
+  S.gcalRange = range;
+  localStorage.setItem('gcalRange', range);
+  document.querySelectorAll('.gcal-range-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.range === range);
+  });
+  refreshMeetings().catch(() => {});
 }
 
 function startGcalPolling() {
@@ -1576,21 +1612,47 @@ function renderMeetings() {
   const list = $('#meetingsList');
   const empty = $('#meetingsEmpty');
   const cta = $('#meetingsConnectCta');
+  const nav = $('#gcalRangeNav');
+  const rangeLabel = $('#gcalRangeLabel');
   if (!list) return;
 
   if (S.gcalStatus !== 'connected') {
     list.classList.add('hidden');
     empty.classList.add('hidden');
+    nav.classList.add('hidden');
+    rangeLabel.classList.add('hidden');
     cta.classList.remove('hidden');
     return;
   }
 
   cta.classList.add('hidden');
+  nav.classList.remove('hidden');
+  rangeLabel.classList.remove('hidden');
+
+  const bounds = getGcalRangeBounds();
+  const fmtDate = d => d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+  const endVisible = new Date(bounds.end); endVisible.setDate(endVisible.getDate() - 1);
+  rangeLabel.textContent = `📅 ${bounds.label} · ${fmtDate(bounds.start)} – ${fmtDate(endVisible)}`;
+
   list.innerHTML = '';
-  const events = S.gcalMeetings.filter(e => (e.start && (e.start.dateTime || e.start.date)));
+  const events = S.gcalMeetings
+    .filter(e => e.start && (e.start.dateTime || e.start.date))
+    .sort((a, b) => {
+      const aS = new Date(a.start.dateTime || a.start.date).getTime();
+      const bS = new Date(b.start.dateTime || b.start.date).getTime();
+      // For past range, show most recent first (descending); otherwise ascending
+      return S.gcalRange === 'past' ? bS - aS : aS - bS;
+    });
+
   if (!events.length) {
     list.classList.add('hidden');
     empty.classList.remove('hidden');
+    const emptyText = $('#meetingsEmptyText');
+    if (emptyText) emptyText.textContent = S.gcalRange === 'past'
+      ? 'No meetings in the past 7 days.'
+      : S.gcalRange === 'week'
+        ? 'No meetings in the next 7 days.'
+        : 'No meetings today or tomorrow.';
     return;
   }
   list.classList.remove('hidden');
@@ -1598,6 +1660,7 @@ function renderMeetings() {
 
   const now = Date.now();
   const todayKey = new Date().toDateString();
+  const yesterdayKey = new Date(Date.now() - 86400000).toDateString();
   const tomorrowKey = new Date(Date.now() + 86400000).toDateString();
   let currentSection = null;
 
@@ -1609,9 +1672,11 @@ function renderMeetings() {
     const dayKey = startD.toDateString();
     const sectionLabel = dayKey === todayKey
       ? 'TODAY'
-      : dayKey === tomorrowKey
-        ? 'TOMORROW'
-        : startD.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase();
+      : dayKey === yesterdayKey
+        ? 'YESTERDAY'
+        : dayKey === tomorrowKey
+          ? 'TOMORROW'
+          : startD.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase();
     if (sectionLabel !== currentSection) {
       currentSection = sectionLabel;
       const h = el('div', 'meetings-section-header', sectionLabel);
@@ -1626,20 +1691,88 @@ function renderMeetings() {
       : `${startD.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – ${endD.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     const link = getMeetingLink(ev);
     const attendees = (ev.attendees || []).filter(a => !a.resource).length;
+    const hasDetails = !!(ev.description || ev.location || ev.organizer || attendees > 0);
+    const expanded = S.expandedMeetingIds.has(ev.id);
 
-    const card = el('div', `meeting-card ${isPast ? 'past' : ''} ${isActive ? 'active' : ''}`);
+    const card = el('div', `meeting-card ${isPast && !isActive ? 'past' : ''} ${isActive ? 'active' : ''} ${hasDetails ? 'expandable' : ''}`);
+    card.dataset.meetingId = ev.id;
+
+    const gcalLink = ev.htmlLink || `https://calendar.google.com/calendar/u/0/r/eventedit/${btoa(ev.id)}`;
+    const joinClass = isPast && !isActive ? 'meeting-join-past' : `meeting-join-${link ? link.type : 'meet'}`;
+    const joinLabel = isPast && !isActive ? `Open ${link ? link.label : 'Meeting'}` : `Join ${link ? link.label : 'Meeting'}`;
+
     card.innerHTML = `
       <div class="meeting-time">
         ${escapeHTML(timeStr)}
         ${isActive ? '<span style="color:#22c55e;font-weight:800">· 🔴 LIVE</span>' : ''}
-        ${isPast && !isActive ? '<span style="opacity:0.6">· ✓</span>' : ''}
+        ${isPast && !isActive ? '<span style="opacity:0.7">· ✓</span>' : ''}
       </div>
       <div class="meeting-title">${escapeHTML(ev.summary || '(no title)')}</div>
-      ${attendees > 0 ? `<div class="meeting-attendees">👥 ${attendees} attendee${attendees > 1 ? 's' : ''}</div>` : ''}
-      ${link && !isPast ? `<a href="${escapeHTML(link.url)}" target="_blank" rel="noopener" class="meeting-join-btn meeting-join-${link.type}">▶ Join ${escapeHTML(link.label)}</a>` : ''}
+      ${attendees > 0 ? `<div class="meeting-attendees">👥 ${attendees} attendee${attendees > 1 ? 's' : ''}${ev.organizer && ev.organizer.displayName ? ' · organiser: ' + escapeHTML(ev.organizer.displayName) : ''}</div>` : ''}
+      ${link ? `<a href="${escapeHTML(link.url)}" target="_blank" rel="noopener" class="meeting-join-btn ${joinClass}" data-nobubble>▶ ${escapeHTML(joinLabel)}</a>` : ''}
+      ${expanded && hasDetails ? `
+        <div class="meeting-details">
+          ${ev.location ? `<div class="meeting-details-row"><span class="meeting-details-label">📍 Where</span><span class="meeting-details-val">${escapeHTML(ev.location).slice(0, 200)}</span></div>` : ''}
+          ${ev.description ? `<div class="meeting-details-row"><span class="meeting-details-label">📝 Notes</span><span class="meeting-details-val">${sanitizeDescription(ev.description)}</span></div>` : ''}
+          ${attendees > 0 && ev.attendees ? `<div class="meeting-details-row"><span class="meeting-details-label">👥 Who</span><span class="meeting-details-val">${escapeHTML(ev.attendees.filter(a=>!a.resource).map(a=>a.displayName||a.email).slice(0,8).join(', '))}${ev.attendees.length > 8 ? `, +${ev.attendees.length-8} more` : ''}</span></div>` : ''}
+          <a href="${escapeHTML(gcalLink)}" target="_blank" rel="noopener" class="meeting-gcal-link" data-nobubble>📅 Open in Google Calendar</a>
+        </div>
+      ` : ''}
     `;
+
+    if (hasDetails) {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('[data-nobubble]')) return;
+        if (expanded) S.expandedMeetingIds.delete(ev.id);
+        else S.expandedMeetingIds.add(ev.id);
+        renderMeetings();
+      });
+    }
     list.appendChild(card);
   });
+}
+
+function sanitizeDescription(html) {
+  // Gcal descriptions can contain HTML (links, line breaks). Convert to plain text with linkified URLs.
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  const text = (tmp.textContent || '').slice(0, 500);
+  return escapeHTML(text).replace(/(https?:\/\/[^\s<>]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+}
+
+function updateGcalCountdown() {
+  const wrap = $('#gcalCountdown');
+  if (!wrap) return;
+  if (S.gcalStatus !== 'connected') { wrap.classList.add('hidden'); return; }
+  const now = Date.now();
+  const upcoming = S.gcalMeetings
+    .filter(e => e.start && e.start.dateTime)
+    .map(e => ({ e, start: new Date(e.start.dateTime).getTime(), end: new Date(e.end.dateTime || e.start.dateTime).getTime() }))
+    .filter(m => m.end > now)
+    .sort((a, b) => a.start - b.start);
+  if (!upcoming.length) { wrap.classList.add('hidden'); return; }
+  const m = upcoming[0];
+  const mins = Math.round((m.start - now) / 60000);
+  const active = m.start <= now && m.end > now;
+  wrap.classList.remove('hidden');
+  wrap.classList.toggle('gcal-countdown-active', active);
+  if (active) {
+    const endMin = Math.max(0, Math.round((m.end - now) / 60000));
+    wrap.innerHTML = `🔴 LIVE · ${escapeHTML(m.e.summary || 'Meeting')} · ${endMin}m left`;
+  } else if (mins <= 0) {
+    wrap.innerHTML = `⏰ Starting now · ${escapeHTML(m.e.summary || 'Meeting')}`;
+  } else if (mins < 60) {
+    wrap.innerHTML = `⏰ Next: ${escapeHTML(m.e.summary || 'Meeting')} · in ${mins}m`;
+  } else {
+    const hrs = Math.floor(mins / 60);
+    const rem = mins % 60;
+    wrap.innerHTML = `⏰ Next: ${escapeHTML(m.e.summary || 'Meeting')} · in ${hrs}h ${rem}m`;
+  }
+}
+
+function startGcalCountdownTicker() {
+  if (S.gcalCountdownTimer) clearInterval(S.gcalCountdownTimer);
+  S.gcalCountdownTimer = setInterval(updateGcalCountdown, 30_000);
 }
 
 async function initGcal() {
@@ -1648,6 +1781,7 @@ async function initGcal() {
     renderMeetings();
     refreshMeetings().catch(() => {});
     startGcalPolling();
+    startGcalCountdownTicker();
   } else if (S.gcalToken) {
     S.gcalToken = null;
     localStorage.removeItem('gcalToken');

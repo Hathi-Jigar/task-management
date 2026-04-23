@@ -118,6 +118,18 @@
           <span class="side-panel-title">MEETINGS</span>
           <button class="side-panel-action" id="gcalRefreshBtn" title="Refresh meetings" aria-label="Refresh meetings">🔄</button>
         </header>
+
+        <!-- Next meeting countdown (only when connected + has upcoming) -->
+        <div id="gcalCountdown" class="gcal-countdown hidden"></div>
+
+        <!-- Date range switcher (only when connected) -->
+        <div id="gcalRangeNav" class="gcal-range-nav hidden">
+          <button class="gcal-range-btn" data-range="past">← 7 days</button>
+          <button class="gcal-range-btn active" data-range="upcoming">Today + Tmrw</button>
+          <button class="gcal-range-btn" data-range="week">Next 7d →</button>
+        </div>
+        <div id="gcalRangeLabel" class="gcal-range-label hidden"></div>
+
         <div id="meetingsConnectCta" class="side-panel-body">
           <div class="gcal-cta">
             <div class="gcal-cta-icon">📅</div>
@@ -129,7 +141,7 @@
         <div id="meetingsEmpty" class="side-panel-body hidden">
           <div class="gcal-cta">
             <div class="gcal-cta-icon">🌤️</div>
-            <div class="gcal-cta-text">No meetings today or tomorrow.</div>
+            <div class="gcal-cta-text" id="meetingsEmptyText">No meetings in this range.</div>
           </div>
         </div>
       </section>

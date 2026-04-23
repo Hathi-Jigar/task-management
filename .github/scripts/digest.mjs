@@ -5,6 +5,7 @@
 const [OWNER, REPO] = (process.env.REPO || '').split('/');
 const TOKEN = process.env.GITHUB_TOKEN;
 const WEBHOOK = process.env.GCHAT_WEBHOOK;
+const GCAL_ICAL_URL = process.env.GCAL_ICAL_URL;
 const TZ = 'Asia/Kolkata';
 
 if (!WEBHOOK) { console.error('GCHAT_WEBHOOK secret not set — add it in repo settings.'); process.exit(1); }
@@ -101,6 +102,98 @@ function getTags(issue) {
     .map(l => l.name);
 }
 
+/* =================== iCal parsing =================== */
+function parseICalDate(value, tzid) {
+  if (!value) return null;
+  const m = value.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2}))?(Z?)/);
+  if (!m) return null;
+  const [, y, mo, d, hh, mm, ss, z] = m;
+  if (hh === undefined) {
+    // Date-only (all-day)
+    return { date: new Date(Date.UTC(+y, +mo - 1, +d)), allDay: true };
+  }
+  if (z === 'Z') {
+    return { date: new Date(Date.UTC(+y, +mo - 1, +d, +hh, +mm, +ss || 0)), allDay: false };
+  }
+  // Floating or TZID-bound. If TZID is Asia/Kolkata, adjust; else treat as IST (safe for digiqc.com users).
+  const offsetMin = tzid && tzid !== 'Asia/Kolkata' ? 0 : 330; // 5h30m for IST
+  const utcMs = Date.UTC(+y, +mo - 1, +d, +hh, +mm, +ss || 0) - offsetMin * 60 * 1000;
+  return { date: new Date(utcMs), allDay: false };
+}
+
+function unescapeICal(s) {
+  return (s || '').replace(/\\n/gi, '\n').replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\\\/g, '\\');
+}
+
+function extractMeetLink(location, description) {
+  const text = [location || '', description || ''].join(' ');
+  const patterns = [
+    { re: /https?:\/\/meet\.google\.com\/[^\s<>"']+/i, label: 'Meet' },
+    { re: /https?:\/\/[^\s<>"']*zoom\.us\/[^\s<>"']+/i, label: 'Zoom' },
+    { re: /https?:\/\/(?:teams\.microsoft\.com|teams\.live\.com)\/[^\s<>"']+/i, label: 'Teams' }
+  ];
+  for (const p of patterns) {
+    const m = text.match(p.re);
+    if (m) return { url: m[0].replace(/[.,;)]+$/, ''), label: p.label };
+  }
+  return null;
+}
+
+function parseIcsEvents(ics) {
+  const events = [];
+  // Unfold line continuations (RFC 5545)
+  const unfolded = ics.replace(/\r?\n[ \t]/g, '');
+  const blocks = unfolded.split(/BEGIN:VEVENT/i).slice(1);
+  for (const block of blocks) {
+    const body = block.split(/END:VEVENT/i)[0];
+    const props = {};
+    const tzids = {};
+    for (const line of body.split(/\r?\n/)) {
+      const m = line.match(/^([A-Z-]+)((?:;[^:]+)?):(.*)$/);
+      if (!m) continue;
+      const key = m[1].toUpperCase();
+      const params = m[2] || '';
+      const val = m[3];
+      props[key] = val;
+      const tzm = params.match(/TZID=([^;:]+)/i);
+      if (tzm) tzids[key] = tzm[1];
+    }
+    if (!props.SUMMARY) continue;
+    if (props.STATUS && props.STATUS.toUpperCase() === 'CANCELLED') continue;
+    const startParsed = parseICalDate(props.DTSTART, tzids.DTSTART);
+    const endParsed = parseICalDate(props.DTEND, tzids.DTEND);
+    if (!startParsed) continue;
+    events.push({
+      uid: props.UID,
+      summary: unescapeICal(props.SUMMARY),
+      location: unescapeICal(props.LOCATION),
+      description: unescapeICal(props.DESCRIPTION),
+      start: startParsed.date,
+      end: endParsed ? endParsed.date : startParsed.date,
+      allDay: startParsed.allDay
+    });
+  }
+  return events;
+}
+
+async function fetchTodayMeetings() {
+  if (!GCAL_ICAL_URL) return null;
+  try {
+    const res = await fetch(GCAL_ICAL_URL);
+    if (!res.ok) { console.warn('iCal fetch', res.status); return null; }
+    const text = await res.text();
+    const events = parseIcsEvents(text);
+    const todayKey = istParts(new Date()).dateKey;
+    const todayEvents = events
+      .filter(e => !e.allDay && istParts(e.start).dateKey === todayKey)
+      .sort((a, b) => a.start - b.start);
+    return todayEvents;
+  } catch (e) {
+    console.warn('Meetings fetch failed', e);
+    return null;
+  }
+}
+
 async function main() {
   const now = new Date();
   const todayKey = istParts(now).dateKey;
@@ -127,13 +220,17 @@ async function main() {
   today.sort((a, b) => a.deadline - b.deadline);
 
   const streak = await computeStreak().catch(() => 0);
+  const meetings = await fetchTodayMeetings();
 
   let msg = `🌅 *Good morning, Adventurer!*  \`${dayLabel(now)}\`\n`;
   if (streak > 0) msg += `🔥 Current streak: *${streak} day${streak > 1 ? 's' : ''}*\n`;
   msg += '\n';
 
-  if (!overdue.length && !today.length) {
-    msg += `🌤️ *No quests scheduled for today.*\nA well-earned rest awaits, hero. 🛡️\n\nScribe a new quest when you're ready. ⚔️`;
+  const hasMeetings = Array.isArray(meetings) && meetings.length > 0;
+  const hasAnything = overdue.length || today.length || hasMeetings;
+
+  if (!hasAnything) {
+    msg += `🌤️ *No quests or meetings today.*\nA well-earned rest awaits, hero. 🛡️\n\nScribe a new quest when you're ready. ⚔️`;
   } else {
     if (overdue.length) {
       msg += `⚠️ *OVERDUE (${overdue.length})*\n`;
@@ -155,7 +252,27 @@ async function main() {
       }
       msg += '\n';
     }
+    if (hasMeetings) {
+      msg += `🎥 *MEETINGS TODAY (${meetings.length})*\n`;
+      for (const m of meetings) {
+        const hhmm = istParts(m.start).hhmm;
+        const endHhmm = istParts(m.end).hhmm;
+        const link = extractMeetLink(m.location, m.description);
+        const linkStr = link ? ` — <${link.url}|▶ Join ${link.label}>` : '';
+        const title = (m.summary || '(no title)').slice(0, 80);
+        msg += `• \`${hhmm}–${endHhmm}\` *${title}*${linkStr}\n`;
+      }
+      msg += '\n';
+    }
     msg += `_Conquer today and earn your XP! ⚔️_`;
+  }
+
+  if (GCAL_ICAL_URL && !hasMeetings) {
+    // Keep user informed: iCal was checked but found nothing
+    // (no extra message — avoid clutter)
+  } else if (!GCAL_ICAL_URL) {
+    // Gentle nudge the first few digests
+    // (commented out — don't want to nag)
   }
 
   const appUrl = `https://${OWNER.toLowerCase()}.github.io/${REPO}/`;

@@ -21,5 +21,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GCHAT_WEBHOOK: ${{ secrets.GCHAT_WEBHOOK }}
+          GCAL_ICAL_URL: ${{ secrets.GCAL_ICAL_URL }}
           REPO: ${{ github.repository }}
         run: node .github/scripts/digest.mjs
