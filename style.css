@@ -578,13 +578,8 @@ code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;
     padding: 16px 0 120px;
     position: sticky;
     top: 220px;
-    max-height: calc(100vh - 240px);
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(167,139,250,0.3) transparent;
+    align-self: start;
   }
-  .sidebar::-webkit-scrollbar { width: 6px; }
-  .sidebar::-webkit-scrollbar-thumb { background: rgba(167,139,250,0.3); border-radius: 3px; }
 }
 .side-panel {
   background: rgba(42,30,77,0.55);
@@ -680,8 +675,12 @@ code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;
 }
 .meetings-list::-webkit-scrollbar { width: 6px; }
 .meetings-list::-webkit-scrollbar-thumb { background: rgba(167,139,250,0.3); border-radius: 3px; }
+.meetings-list::-webkit-scrollbar-thumb:hover { background: rgba(167,139,250,0.6); }
 @media (min-width: 900px) {
-  .meetings-list { max-height: none; }
+  .meetings-list {
+    max-height: calc(100vh - 380px);
+    min-height: 200px;
+  }
 }
 .meetings-section-header {
   font-family: 'VT323', monospace;
@@ -830,7 +829,16 @@ code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;
 .fab.pulse { animation: fabPulse 1.2s infinite; }
 .fab-plus { line-height: 1; }
 @media (min-width: 900px) {
-  .fab { display: none; }
+  .fab {
+    right: 408px;
+    width: 56px; height: 56px;
+    font-size: 32px;
+  }
+}
+@media (min-width: 1200px) {
+  .fab {
+    right: 448px;
+  }
 }
 
 /* ============ MODALS ============ */

@@ -660,9 +660,10 @@ function renderTagFilter() {
   const tagsInUse = new Set(openTasks.flatMap(t => t.tags));
   const overdueCount = openTasks.filter(isOverdue).length;
 
-  // Inline "+ Scribe Quest" button — primary CTA in the filter row
+  // Inline "+ New Quest" button — primary CTA in the filter row
   const addBtn = el('button', 'filter-add-btn');
-  addBtn.innerHTML = '⚔️ <span>Scribe Quest</span>';
+  addBtn.innerHTML = '<span style="font-size:16px;line-height:1">+</span> <span>New Quest</span>';
+  addBtn.title = 'Add a new quest';
   addBtn.addEventListener('click', () => openTaskModal());
   wrap.appendChild(addBtn);
 
