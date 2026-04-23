@@ -457,12 +457,22 @@ function renderTaskCard(task, opts = {}) {
   const recurringHTML = task.recurring && task.recurring !== 'none'
     ? `<span class="task-recurring">🔁 ${task.recurring}</span>` : '';
 
-  const notesHTML = task.notes
+  const imageUrls = extractImageUrls(task.notes);
+  const textOnly = notesTextOnly(task.notes);
+  const hasNotes = textOnly || imageUrls.length;
+
+  const notesHTML = hasNotes
     ? `<div class="task-notes-wrap">
-         <div class="task-notes">${escapeHTML(task.notes)}</div>
+         <div class="task-notes-col">
+           ${textOnly ? `<div class="task-notes">${escapeHTML(textOnly)}</div>` : ''}
+           ${renderTaskImagesHTML(imageUrls)}
+         </div>
          <button class="task-note-edit-btn" title="Edit note" aria-label="Edit note">✏️</button>
        </div>`
-    : `<button class="task-add-note-btn" title="Add note">📝 Add note</button>`;
+    : `<button class="task-add-note-btn" title="Add note or photo">📝 Add note</button>`;
+  const photoBadgeHTML = imageUrls.length
+    ? `<span class="task-photo-badge" title="${imageUrls.length} photo${imageUrls.length > 1 ? 's' : ''}">📷 ${imageUrls.length}</span>`
+    : '';
 
   card.innerHTML = `
     ${checkHTML}
@@ -472,6 +482,7 @@ function renderTaskCard(task, opts = {}) {
         <span class="task-deadline ${dl.cls}">${dl.text}</span>
         ${tagsHTML}
         ${recurringHTML}
+        ${photoBadgeHTML}
       </div>
       ${notesHTML}
     </div>
@@ -507,6 +518,14 @@ function renderTaskCard(task, opts = {}) {
     enterInlineNoteEdit(card, task);
   });
 
+  card.querySelectorAll('.task-image-thumb').forEach(thumb => {
+    thumb.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const url = thumb.dataset.img;
+      openLightbox(url, imageUrls);
+    });
+  });
+
   return card;
 }
 
@@ -515,6 +534,9 @@ function enterInlineNoteEdit(card, task) {
   if (!body || card.querySelector('.task-notes-edit')) return;
 
   const existing = task.notes || '';
+  const existingText = notesTextOnly(existing);
+  let currentPhotos = extractImageUrls(existing);
+
   const wrap = card.querySelector('.task-notes-wrap');
   const addBtn = card.querySelector('.task-add-note-btn');
 
@@ -522,10 +544,18 @@ function enterInlineNoteEdit(card, task) {
   const ta = document.createElement('textarea');
   ta.className = 'task-notes-edit';
   ta.rows = 3;
-  ta.value = existing;
+  ta.value = existingText;
   ta.placeholder = 'Add a note… (tap outside to save, Esc to cancel)';
+
   const hint = el('div', 'task-notes-edit-hint', '<span class="note-save-status">📝 Editing…</span>');
+
+  const photoCtl = createPhotoStrip({
+    getUrls: () => currentPhotos,
+    setUrls: (u) => { currentPhotos = u; }
+  });
+
   editWrap.appendChild(ta);
+  editWrap.appendChild(photoCtl.el);
   editWrap.appendChild(hint);
 
   if (wrap) wrap.replaceWith(editWrap);
@@ -540,8 +570,17 @@ function enterInlineNoteEdit(card, task) {
 
   const finish = async () => {
     if (done) return;
+    // If photos are still uploading, wait a beat before saving
+    if (photoCtl.isUploading()) {
+      hint.querySelector('.note-save-status').textContent = '📷 Waiting for uploads…';
+      const waitStart = Date.now();
+      while (photoCtl.isUploading() && Date.now() - waitStart < 30000) {
+        await new Promise(r => setTimeout(r, 300));
+      }
+    }
     done = true;
-    const newNotes = cancelled ? existing : ta.value.trim();
+    const newText = cancelled ? existingText : ta.value.trim();
+    const newNotes = cancelled ? existing : combineNotes(newText, currentPhotos);
     if (newNotes === existing) {
       renderAll();
       return;
@@ -571,7 +610,12 @@ function enterInlineNoteEdit(card, task) {
     }
   };
 
-  ta.addEventListener('blur', finish);
+  ta.addEventListener('blur', (e) => {
+    // Ignore blur when focus is moving into the photo strip (add/remove buttons)
+    const next = e.relatedTarget;
+    if (next && editWrap.contains(next)) return;
+    finish();
+  });
   ta.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -708,14 +752,27 @@ function renderBadgesGrid() {
 }
 
 /* ========== TASK MODAL ========== */
+let modalPhotoCtl = null;
+
 function openTaskModal(task = null) {
   S.editingTaskId = task ? task.id : null;
   S.selectedTags = new Set(task ? task.tags : []);
   $('#taskModalTitle').textContent = task ? '✏️ Edit Quest' : '⚔️ New Quest';
   $('#taskTitle').value = task ? task.title : '';
   $('#taskRecurring').value = task ? task.recurring || 'none' : 'none';
-  $('#taskNotes').value = task ? task.notes : '';
+  const existingNotes = task ? task.notes : '';
+  $('#taskNotes').value = notesTextOnly(existingNotes);
   $('#taskSubmitBtn .btn-label').textContent = task ? '💾 Save Changes' : '⚔️ Scribe Quest';
+
+  // Photo strip
+  const mount = $('#taskPhotoStripMount');
+  mount.innerHTML = '';
+  let photos = extractImageUrls(existingNotes);
+  modalPhotoCtl = createPhotoStrip({
+    getUrls: () => photos,
+    setUrls: (u) => { photos = u; }
+  });
+  mount.appendChild(modalPhotoCtl.el);
 
   const pad = n => String(n).padStart(2, '0');
   const toLocalDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -780,11 +837,28 @@ async function handleTaskSubmit(ev) {
     if (!y || !mo || !d) { toast('Invalid date', 'error'); return; }
     const deadlineDate = new Date(y, mo - 1, d, isNaN(hh) ? 18 : hh, isNaN(mm) ? 30 : mm, 0, 0);
     const deadline = deadlineDate.toISOString();
+    // Wait for any in-flight photo uploads
+    if (modalPhotoCtl && modalPhotoCtl.isUploading()) {
+      btn.querySelector('.btn-label').textContent = '📷 Uploading photos…';
+      const waitStart = Date.now();
+      while (modalPhotoCtl.isUploading() && Date.now() - waitStart < 60000) {
+        await new Promise(r => setTimeout(r, 300));
+      }
+    }
+    const modalPhotos = modalPhotoCtl ? (() => {
+      // Scrape URLs from the strip's DOM via createPhotoStrip's closure — use simpler approach: re-read from DOM backgrounds
+      return [...modalPhotoCtl.el.querySelectorAll('.photo-preview-item:not(.uploading)')].map(it => {
+        const bg = it.style.backgroundImage;
+        const m = bg.match(/url\(['"]?([^'")]+)['"]?\)/);
+        return m ? m[1] : null;
+      }).filter(Boolean);
+    })() : [];
+    const textNotes = $('#taskNotes').value.trim();
     const data = {
       title,
       deadline,
       recurring: $('#taskRecurring').value,
-      notes: $('#taskNotes').value.trim(),
+      notes: combineNotes(textNotes, modalPhotos),
       tags: [...S.selectedTags]
     };
     if (S.editingTaskId) {
@@ -1441,6 +1515,231 @@ function wireEvents() {
   $$('.modal').forEach(m => {
     m.addEventListener('click', (e) => { if (e.target === m) closeModals(); });
   });
+}
+
+/* ========== PHOTO ATTACHMENTS ========== */
+
+const MAX_PHOTOS_PER_TASK = 10;
+const MAX_PHOTO_DIMENSION = 1600;
+const PHOTO_JPEG_QUALITY = 0.85;
+
+async function compressImage(file) {
+  const img = await new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = () => rej(new Error('Could not decode image'));
+    i.src = URL.createObjectURL(file);
+  });
+  let { width, height } = img;
+  const max = Math.max(width, height);
+  if (max > MAX_PHOTO_DIMENSION) {
+    const scale = MAX_PHOTO_DIMENSION / max;
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, width, height);
+  URL.revokeObjectURL(img.src);
+  const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', PHOTO_JPEG_QUALITY));
+  if (!blob) throw new Error('Compression failed');
+  return blob;
+}
+
+async function uploadImageToRepo(blob, originalName) {
+  const base64 = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).split(',')[1]);
+    r.onerror = () => rej(new Error('Could not read file'));
+    r.readAsDataURL(blob);
+  });
+  const stem = (originalName || 'photo')
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^a-zA-Z0-9-]/g, '_')
+    .slice(0, 30) || 'photo';
+  const filename = `${Date.now()}-${stem}.jpg`;
+  const path = `images/${filename}`;
+  const res = await gh(`/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${path}`, 'PUT', {
+    message: `Add quest image ${filename}`,
+    content: base64
+  });
+  return res.content.download_url;
+}
+
+function extractImageUrls(notes) {
+  if (!notes) return [];
+  const regex = /!\[[^\]]*\]\(([^)\s]+)\)/g;
+  const urls = [];
+  let m;
+  while ((m = regex.exec(notes)) !== null) urls.push(m[1]);
+  return urls;
+}
+
+function notesTextOnly(notes) {
+  if (!notes) return '';
+  return notes
+    .replace(/!\[[^\]]*\]\([^)\s]+\)/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function combineNotes(text, imageUrls) {
+  const parts = [];
+  const t = (text || '').trim();
+  if (t) parts.push(t);
+  if (imageUrls && imageUrls.length) {
+    parts.push(imageUrls.map(u => `![photo](${u})`).join('\n'));
+  }
+  return parts.join('\n\n');
+}
+
+function renderTaskImagesHTML(urls) {
+  if (!urls || !urls.length) return '';
+  const shown = urls.slice(0, 4);
+  const extra = urls.length - shown.length;
+  const thumbs = shown.map((u, i) => {
+    const isLast = (i === shown.length - 1) && extra > 0;
+    const overlay = isLast ? `<div class="task-image-more-overlay">+${extra}</div>` : '';
+    return `<div class="task-image-thumb" style="background-image:url('${escapeHTML(u)}')" data-img="${escapeHTML(u)}" data-nobubble>${overlay}</div>`;
+  }).join('');
+  return `<div class="task-images" data-nobubble>${thumbs}</div>`;
+}
+
+/* ========== LIGHTBOX ========== */
+function openLightbox(url, allUrls) {
+  const urls = (allUrls && allUrls.length) ? allUrls : [url];
+  let idx = Math.max(0, urls.indexOf(url));
+  const lb = document.createElement('div');
+  lb.className = 'lightbox';
+
+  const render = () => {
+    lb.innerHTML = `
+      <button class="lightbox-close" aria-label="Close">✕</button>
+      ${urls.length > 1 ? `
+        <button class="lightbox-nav lightbox-prev" aria-label="Previous">‹</button>
+        <button class="lightbox-nav lightbox-next" aria-label="Next">›</button>
+        <div class="lightbox-counter">${idx + 1} / ${urls.length}</div>
+      ` : ''}
+      <img src="${escapeHTML(urls[idx])}" alt="quest photo" />
+    `;
+    lb.querySelector('.lightbox-close').addEventListener('click', (e) => { e.stopPropagation(); close(); });
+    const prev = lb.querySelector('.lightbox-prev');
+    const next = lb.querySelector('.lightbox-next');
+    if (prev) prev.addEventListener('click', (e) => { e.stopPropagation(); idx = (idx - 1 + urls.length) % urls.length; render(); });
+    if (next) next.addEventListener('click', (e) => { e.stopPropagation(); idx = (idx + 1) % urls.length; render(); });
+  };
+  const close = () => {
+    document.removeEventListener('keydown', onKey);
+    lb.remove();
+  };
+  const onKey = (e) => {
+    if (e.key === 'Escape') close();
+    else if (e.key === 'ArrowLeft') { idx = (idx - 1 + urls.length) % urls.length; render(); }
+    else if (e.key === 'ArrowRight') { idx = (idx + 1) % urls.length; render(); }
+  };
+  lb.addEventListener('click', (e) => { if (e.target === lb) close(); });
+  document.addEventListener('keydown', onKey);
+  render();
+  document.body.appendChild(lb);
+}
+
+/* ========== PHOTO STRIP (shared by modal + inline editor) ========== */
+function createPhotoStrip({ getUrls, setUrls, onChange }) {
+  const strip = document.createElement('div');
+  strip.className = 'photo-strip';
+
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = 'image/*';
+  fileInput.multiple = true;
+  try { fileInput.capture = 'environment'; } catch {}
+  fileInput.style.display = 'none';
+
+  const renderStrip = () => {
+    const urls = getUrls();
+    strip.innerHTML = '';
+    urls.forEach((url) => {
+      const item = document.createElement('div');
+      item.className = 'photo-preview-item';
+      item.style.backgroundImage = `url('${url}')`;
+      item.addEventListener('click', (e) => { e.stopPropagation(); openLightbox(url, getUrls()); });
+      const rm = document.createElement('button');
+      rm.className = 'photo-remove-btn';
+      rm.textContent = '✕';
+      rm.title = 'Remove photo';
+      rm.addEventListener('mousedown', e => e.preventDefault());
+      rm.addEventListener('click', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const next = getUrls().filter(u => u !== url);
+        setUrls(next);
+        renderStrip();
+        onChange && onChange();
+      });
+      item.appendChild(rm);
+      strip.appendChild(item);
+    });
+    if (urls.length < MAX_PHOTOS_PER_TASK) {
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'photo-add-btn';
+      add.innerHTML = '<span class="photo-add-ico">📷</span><span class="photo-add-plus">+</span>';
+      add.title = 'Attach or take photo';
+      // prevent blur of inline textarea when clicking the button
+      add.addEventListener('mousedown', e => e.preventDefault());
+      add.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); fileInput.click(); });
+      strip.appendChild(add);
+    }
+    strip.appendChild(fileInput);
+  };
+
+  fileInput.addEventListener('change', async () => {
+    const files = [...fileInput.files];
+    fileInput.value = '';
+    if (!files.length) return;
+    const slots = MAX_PHOTOS_PER_TASK - getUrls().length;
+    if (slots <= 0) { toast('Max 10 photos per quest', 'error'); return; }
+    const batch = files.slice(0, slots);
+    if (files.length > slots) toast(`Only ${slots} more photo(s) allowed`, 'error');
+
+    // Add placeholders
+    const placeholders = [];
+    const addBtn = strip.querySelector('.photo-add-btn');
+    batch.forEach(() => {
+      const ph = document.createElement('div');
+      ph.className = 'photo-preview-item uploading';
+      ph.innerHTML = '<div class="photo-spinner">⚔️</div>';
+      strip.insertBefore(ph, addBtn || null);
+      placeholders.push(ph);
+    });
+    strip.classList.add('is-uploading');
+
+    let completed = 0;
+    const uploads = batch.map(async (file, i) => {
+      try {
+        const blob = await compressImage(file);
+        const url = await uploadImageToRepo(blob, file.name);
+        completed++;
+        return url;
+      } catch (e) {
+        console.error(e);
+        toast('Upload failed: ' + e.message, 'error');
+        return null;
+      }
+    });
+    const urls = (await Promise.all(uploads)).filter(Boolean);
+    setUrls([...getUrls(), ...urls]);
+    strip.classList.remove('is-uploading');
+    renderStrip();
+    if (urls.length) {
+      sparkle(window.innerWidth / 2, window.innerHeight / 2);
+      playSound('add');
+    }
+    onChange && onChange();
+  });
+
+  renderStrip();
+  return { el: strip, refresh: renderStrip, isUploading: () => strip.classList.contains('is-uploading') };
 }
 
 /* ========== GOOGLE CALENDAR ========== */
