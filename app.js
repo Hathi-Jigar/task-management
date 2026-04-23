@@ -40,6 +40,7 @@ const BADGES = [
 /* ========== STATE ========== */
 const S = {
   token: localStorage.getItem('ghToken') || null,
+  name: localStorage.getItem('questName') || '',
   tasks: [],
   labels: [],
   stats: null,
@@ -374,6 +375,7 @@ function renderHero() {
   const s = S.stats;
   const avatar = s.level >= 50 ? '👑' : s.level >= 25 ? '🧙‍♂️' : s.level >= 10 ? '⚔️' : s.level >= 5 ? '🛡️' : '🧙';
   $('#avatar').textContent = avatar;
+  $('#heroName').textContent = S.name || 'Adventurer';
   $('#levelNum').textContent = s.level;
   const xpPct = Math.min(100, (s.xpIntoLevel / s.xpToNext) * 100);
   $('#xpFill').style.width = `${xpPct}%`;
@@ -887,9 +889,14 @@ async function onLogin() {
   btn.disabled = true;
   btn.querySelector('.btn-label').textContent = '⏳ Verifying…';
   try {
+    const name = $('#nameInput').value.trim();
     const token = $('#tokenInput').value.trim();
     if (!token) throw new Error('Enter a token');
     await tryLogin(token);
+    if (name) {
+      localStorage.setItem('questName', name);
+      S.name = name;
+    }
     $('#loginScreen').classList.add('hidden');
     $('#app').classList.remove('hidden');
     $('#loadingScreen').classList.remove('gone');
@@ -905,8 +912,25 @@ async function onLogin() {
 function logout() {
   if (!confirm('Logout and clear token? Your quests in GitHub stay untouched.')) return;
   localStorage.removeItem('ghToken');
+  localStorage.removeItem('questName');
   S.token = null;
+  S.name = '';
   location.reload();
+}
+
+function changeName() {
+  const current = S.name || '';
+  const next = prompt('What shall we call you, adventurer?', current);
+  if (next === null) return;
+  const trimmed = next.trim();
+  if (trimmed) {
+    S.name = trimmed;
+    localStorage.setItem('questName', trimmed);
+  } else {
+    S.name = '';
+    localStorage.removeItem('questName');
+  }
+  if (S.stats) renderHero();
 }
 
 /* ========== PWA INSTALL ========== */
@@ -973,6 +997,7 @@ function wireEvents() {
   });
   $('#soundToggleBtn').textContent = `🔊 Sound: ${S.soundOn ? 'On' : 'Off'}`;
   $('#tagManagerOpenBtn').addEventListener('click', () => { closeModals(); openTagManager(); });
+  $('#changeNameBtn').addEventListener('click', () => { closeModals(); changeName(); });
   $('#installBtn').addEventListener('click', installApp);
   $('#logoutBtn').addEventListener('click', logout);
   $('#levelUpClose').addEventListener('click', () => $('#levelUpModal').classList.add('hidden'));
@@ -994,6 +1019,7 @@ async function init() {
   if (!S.token) {
     $('#loadingScreen').classList.add('gone');
     $('#loadingScreen').style.display = 'none';
+    if (S.name) $('#nameInput').value = S.name;
     $('#loginScreen').classList.remove('hidden');
     return;
   }

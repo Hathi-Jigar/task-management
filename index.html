@@ -25,11 +25,14 @@
     <h1>Quest Log</h1>
     <p class="tagline">Your life, gamified.</p>
     <ol class="login-steps">
-      <li>Open <a href="https://github.com/settings/tokens/new?scopes=repo&description=Quest%20Log%20App" target="_blank" rel="noopener">GitHub → Create Personal Access Token</a></li>
-      <li>Select scope: <code>repo</code> only</li>
-      <li>Set expiration to <strong>No expiration</strong> (or your preference)</li>
-      <li>Copy the token (starts with <code>ghp_...</code>) and paste below</li>
+      <li>Open <a href="https://github.com/settings/tokens/new?scopes=repo&description=Quest%20Log" target="_blank" rel="noopener">🔗 Generate GitHub Token</a></li>
+      <li>Scope: <code>repo</code> (pre-selected) • Expiration: <strong>No expiration</strong></li>
+      <li>Click <strong>Generate token</strong> → copy the <code>ghp_...</code></li>
+      <li>Enter your name and paste token below</li>
     </ol>
+    <label class="login-label" for="nameInput">Your Name</label>
+    <input id="nameInput" type="text" placeholder="e.g. Varun" autocomplete="given-name" maxlength="40" />
+    <label class="login-label" for="tokenInput">GitHub Token</label>
     <input id="tokenInput" type="password" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off" />
     <button id="loginBtn" class="btn btn-primary btn-lg">
       <span class="btn-label">⚡ Begin Adventure</span>
@@ -46,9 +49,12 @@
     <div class="hero-top">
       <div class="avatar" id="avatar">🧙</div>
       <div class="hero-info">
-        <div class="hero-level">
-          <span class="level-label">LVL</span>
-          <span class="level-num" id="levelNum">1</span>
+        <div class="hero-name-row">
+          <span class="hero-name" id="heroName">Adventurer</span>
+          <span class="hero-level">
+            <span class="level-label">LVL</span>
+            <span class="level-num" id="levelNum">1</span>
+          </span>
         </div>
         <div class="bar xp-bar">
           <div class="bar-fill xp-fill" id="xpFill"></div>
@@ -195,6 +201,7 @@
     </div>
     <div class="menu-actions">
       <button class="btn btn-ghost" id="refreshBtn">🔄 Refresh</button>
+      <button class="btn btn-ghost" id="changeNameBtn">👤 Change Name</button>
       <button class="btn btn-ghost" id="soundToggleBtn">🔊 Sound: On</button>
       <button class="btn btn-ghost" id="tagManagerOpenBtn">🏷️ Manage Tags</button>
       <button class="btn btn-ghost" id="installBtn">📲 Install as App</button>
