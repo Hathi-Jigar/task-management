@@ -375,7 +375,9 @@ function renderHero() {
   const s = S.stats;
   const avatar = s.level >= 50 ? '👑' : s.level >= 25 ? '🧙‍♂️' : s.level >= 10 ? '⚔️' : s.level >= 5 ? '🛡️' : '🧙';
   $('#avatar').textContent = avatar;
-  $('#heroName').textContent = S.name || 'Adventurer';
+  const nameEl = $('#heroName');
+  nameEl.textContent = S.name || 'Tap to set name';
+  nameEl.title = 'Tap to change name';
   $('#levelNum').textContent = s.level;
   const xpPct = Math.min(100, (s.xpIntoLevel / s.xpToNext) * 100);
   $('#xpFill').style.width = `${xpPct}%`;
@@ -954,6 +956,8 @@ function wireEvents() {
 
   $('#fab').addEventListener('click', () => openTaskModal());
   $('#menuBtn').addEventListener('click', () => $('#menuModal').classList.remove('hidden'));
+  $('#heroName').addEventListener('click', () => changeName());
+  $('#avatar').addEventListener('click', () => changeName());
   $('#taskForm').addEventListener('submit', handleTaskSubmit);
 
   $$('.tab').forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
@@ -1031,11 +1035,15 @@ async function init() {
       S.token = null;
       $('#loadingScreen').classList.add('gone');
       $('#loadingScreen').style.display = 'none';
+      if (S.name) $('#nameInput').value = S.name;
       $('#loginScreen').classList.remove('hidden');
       return;
     }
     $('#app').classList.remove('hidden');
     await loadEverything();
+    if (!S.name) {
+      setTimeout(() => changeName(), 300);
+    }
   } catch (e) {
     toast('Could not load: ' + e.message, 'error');
     $('#loadingScreen').classList.add('gone');

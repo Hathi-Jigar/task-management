@@ -138,8 +138,12 @@ code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;
   letter-spacing: 0.3px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 60%;
+  cursor: pointer;
+  transition: color 0.15s;
 }
+.hero-name:hover { color: #ffd700; }
 .hero-name::before { content: '👋 '; }
+.avatar { cursor: pointer; }
 .hero-level {
   display: inline-flex; align-items: baseline; gap: 4px;
   flex-shrink: 0;
