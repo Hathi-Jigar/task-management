@@ -1,0 +1,25 @@
+name: Morning Quest Digest
+
+on:
+  schedule:
+    # 02:30 UTC = 08:00 IST (Asia/Kolkata)
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Send daily digest to Google Chat
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GCHAT_WEBHOOK: ${{ secrets.GCHAT_WEBHOOK }}
+          REPO: ${{ github.repository }}
+        run: node .github/scripts/digest.mjs

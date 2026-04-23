@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#1a1033" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Quest Log" />
+<title>Quest Log — Task Management RPG</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+<link rel="apple-touch-icon" href="icons/icon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=VT323&display=swap" />
+<link rel="stylesheet" href="style.css" />
+<script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+</head>
+<body>
+<!-- ================= LOGIN ================= -->
+<div id="loginScreen" class="screen hidden">
+  <div class="login-card">
+    <div class="login-logo">⚔️</div>
+    <h1>Quest Log</h1>
+    <p class="tagline">Your life, gamified.</p>
+    <ol class="login-steps">
+      <li>Open <a href="https://github.com/settings/tokens/new?scopes=repo&description=Quest%20Log%20App" target="_blank" rel="noopener">GitHub → Create Personal Access Token</a></li>
+      <li>Select scope: <code>repo</code> only</li>
+      <li>Set expiration to <strong>No expiration</strong> (or your preference)</li>
+      <li>Copy the token (starts with <code>ghp_...</code>) and paste below</li>
+    </ol>
+    <input id="tokenInput" type="password" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off" />
+    <button id="loginBtn" class="btn btn-primary btn-lg">
+      <span class="btn-label">⚡ Begin Adventure</span>
+    </button>
+    <p class="login-note">Token is stored only in your browser's localStorage. Never leaves your device.</p>
+  </div>
+</div>
+
+<!-- ================= MAIN APP ================= -->
+<div id="app" class="hidden">
+
+  <!-- HERO -->
+  <header class="hero">
+    <div class="hero-top">
+      <div class="avatar" id="avatar">🧙</div>
+      <div class="hero-info">
+        <div class="hero-level">
+          <span class="level-label">LVL</span>
+          <span class="level-num" id="levelNum">1</span>
+        </div>
+        <div class="bar xp-bar">
+          <div class="bar-fill xp-fill" id="xpFill"></div>
+          <div class="bar-label" id="xpLabel">0 / 100 XP</div>
+        </div>
+        <div class="bar hp-bar">
+          <div class="bar-fill hp-fill" id="hpFill"></div>
+          <div class="bar-label" id="hpLabel">❤️ 100 / 100 HP</div>
+        </div>
+      </div>
+      <button class="icon-btn" id="menuBtn" title="Menu" aria-label="Menu">⚙️</button>
+    </div>
+    <div class="hero-stats">
+      <div class="stat"><span class="stat-icon">🔥</span><span class="stat-val" id="streakVal">0</span><span class="stat-lbl">streak</span></div>
+      <div class="stat"><span class="stat-icon">⚔️</span><span class="stat-val" id="closedVal">0</span><span class="stat-lbl">closed</span></div>
+      <div class="stat"><span class="stat-icon">🎯</span><span class="stat-val" id="openVal">0</span><span class="stat-lbl">open</span></div>
+      <div class="stat"><span class="stat-icon">🏆</span><span class="stat-val" id="badgesVal">0</span><span class="stat-lbl">badges</span></div>
+    </div>
+  </header>
+
+  <!-- TABS -->
+  <nav class="tabs">
+    <button class="tab active" data-tab="today">🎯 Today</button>
+    <button class="tab" data-tab="upcoming">📅 Upcoming</button>
+    <button class="tab" data-tab="all">📋 All</button>
+    <button class="tab" data-tab="done">✅ Done</button>
+    <button class="tab" data-tab="badges">🏆 Badges</button>
+  </nav>
+
+  <!-- CONTENT -->
+  <main class="content">
+    <section id="tab-today" class="tab-content active">
+      <div id="overdueList" class="list overdue-list"></div>
+      <div id="todayList" class="list"></div>
+      <div id="todayEmpty" class="empty hidden">
+        <div class="empty-icon">🌤️</div>
+        <div class="empty-title">No quests for today!</div>
+        <div class="empty-sub">Add one to start earning XP.</div>
+      </div>
+    </section>
+
+    <section id="tab-upcoming" class="tab-content">
+      <div id="upcomingList" class="list"></div>
+      <div id="upcomingEmpty" class="empty hidden">
+        <div class="empty-icon">📅</div>
+        <div class="empty-title">Your calendar is clear</div>
+      </div>
+    </section>
+
+    <section id="tab-all" class="tab-content">
+      <div class="tag-filter" id="tagFilter"></div>
+      <div id="allList" class="list"></div>
+    </section>
+
+    <section id="tab-done" class="tab-content">
+      <div id="doneList" class="list"></div>
+    </section>
+
+    <section id="tab-badges" class="tab-content">
+      <div id="badgesGrid" class="badges-grid"></div>
+    </section>
+  </main>
+
+  <!-- FAB -->
+  <button id="fab" class="fab" title="Add Quest" aria-label="Add Quest">
+    <span class="fab-plus">+</span>
+  </button>
+
+</div>
+
+<!-- ================= ADD/EDIT TASK MODAL ================= -->
+<div id="taskModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2 id="taskModalTitle">⚔️ New Quest</h2>
+      <button class="icon-btn" data-close-modal>✕</button>
+    </div>
+    <form id="taskForm">
+      <label>Quest Title *</label>
+      <input id="taskTitle" type="text" required placeholder="Slay the dragon of procrastination..." maxlength="200" />
+
+      <div class="row">
+        <div class="col">
+          <label>Deadline Date *</label>
+          <input id="taskDate" type="date" required />
+        </div>
+        <div class="col">
+          <label>Time</label>
+          <input id="taskTime" type="time" value="18:30" />
+        </div>
+      </div>
+
+      <label>Tags</label>
+      <div class="tag-chips" id="tagChips"></div>
+      <div class="tag-new-row">
+        <input id="newTagInput" type="text" placeholder="+ New tag" maxlength="40" />
+        <button type="button" class="btn btn-small" id="addNewTagBtn">Add</button>
+        <button type="button" class="btn btn-small btn-ghost" id="manageTagsBtn">Manage</button>
+      </div>
+
+      <label>Recurring</label>
+      <select id="taskRecurring">
+        <option value="none">None (one-time)</option>
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+      </select>
+
+      <label>Notes</label>
+      <textarea id="taskNotes" placeholder="Any context, links, subtasks..." rows="4"></textarea>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" data-close-modal>Cancel</button>
+        <button type="submit" class="btn btn-primary" id="taskSubmitBtn">
+          <span class="btn-label">⚔️ Scribe Quest</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ================= TAG MANAGER MODAL ================= -->
+<div id="tagModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2>🏷️ Manage Tags</h2>
+      <button class="icon-btn" data-close-modal>✕</button>
+    </div>
+    <div id="tagList" class="tag-list"></div>
+    <div class="tag-new-row">
+      <input id="tagManagerNewInput" type="text" placeholder="New tag name" maxlength="40" />
+      <input id="tagManagerNewColor" type="color" value="#9b59b6" />
+      <button type="button" class="btn btn-small btn-primary" id="tagManagerAddBtn">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= MENU MODAL ================= -->
+<div id="menuModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2>⚙️ Menu</h2>
+      <button class="icon-btn" data-close-modal>✕</button>
+    </div>
+    <div class="menu-actions">
+      <button class="btn btn-ghost" id="refreshBtn">🔄 Refresh</button>
+      <button class="btn btn-ghost" id="soundToggleBtn">🔊 Sound: On</button>
+      <button class="btn btn-ghost" id="tagManagerOpenBtn">🏷️ Manage Tags</button>
+      <button class="btn btn-ghost" id="installBtn">📲 Install as App</button>
+      <button class="btn btn-ghost danger" id="logoutBtn">🚪 Logout</button>
+    </div>
+    <div class="menu-footer">
+      <small>Quest Log v1.0 • <a href="https://github.com/Hathi-Jigar/task-management" target="_blank" rel="noopener">source</a></small>
+    </div>
+  </div>
+</div>
+
+<!-- ================= LEVEL UP MODAL ================= -->
+<div id="levelUpModal" class="level-up-modal hidden">
+  <div class="level-up-card">
+    <div class="level-up-burst">✨</div>
+    <div class="level-up-title">LEVEL UP!</div>
+    <div class="level-up-num" id="levelUpNum">2</div>
+    <div class="level-up-sub">You grow stronger, adventurer!</div>
+    <button class="btn btn-primary" id="levelUpClose">Continue ⚔️</button>
+  </div>
+</div>
+
+<!-- ================= BADGE EARNED TOAST ================= -->
+<div id="badgeToast" class="badge-toast hidden">
+  <div class="badge-toast-icon" id="badgeToastIcon">🏆</div>
+  <div>
+    <div class="badge-toast-title">Badge Earned!</div>
+    <div class="badge-toast-name" id="badgeToastName"></div>
+  </div>
+</div>
+
+<!-- ================= LOADING ================= -->
+<div id="loadingScreen" class="loading-screen">
+  <div class="loading-spinner">⚔️</div>
+  <div class="loading-text" id="loadingText">Loading your quest log…</div>
+</div>
+
+<!-- ================= TOAST ================= -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

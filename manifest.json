@@ -1,0 +1,19 @@
+{
+  "name": "Quest Log",
+  "short_name": "Quest Log",
+  "description": "Gamified task management — RPG XP, levels, badges",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a1033",
+  "theme_color": "#1a1033",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
