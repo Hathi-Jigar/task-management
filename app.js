@@ -660,6 +660,12 @@ function renderTagFilter() {
   const tagsInUse = new Set(openTasks.flatMap(t => t.tags));
   const overdueCount = openTasks.filter(isOverdue).length;
 
+  // Inline "+ Scribe Quest" button — primary CTA in the filter row
+  const addBtn = el('button', 'filter-add-btn');
+  addBtn.innerHTML = '⚔️ <span>Scribe Quest</span>';
+  addBtn.addEventListener('click', () => openTaskModal());
+  wrap.appendChild(addBtn);
+
   const allChip = el('div', `tag-filter-chip ${!S.activeTagFilter ? 'active' : ''}`, 'All');
   allChip.addEventListener('click', () => { S.activeTagFilter = null; renderAllOpen(); });
   wrap.appendChild(allChip);
