@@ -102,48 +102,8 @@ function getTags(issue) {
     .map(l => l.name);
 }
 
-/* =================== iCal parsing =================== */
-function parseICalDate(value, tzid) {
-  if (!value) return null;
-  const m = value.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2}))?(Z?)/);
-  if (!m) return null;
-  const [, y, mo, d, hh, mm, ss, z] = m;
-  if (hh === undefined) {
-    return { date: new Date(Date.UTC(+y, +mo - 1, +d)), allDay: true };
-  }
-  if (z === 'Z') {
-    return { date: new Date(Date.UTC(+y, +mo - 1, +d, +hh, +mm, +ss || 0)), allDay: false };
-  }
-  // Floating or TZID-bound.
-  // Heuristic: apply IST offset if TZID is missing or looks Indian; else try Intl resolver, else UTC.
-  let offsetMin = 330;
-  if (tzid) {
-    const istTzids = ['Asia/Kolkata', 'Asia/Calcutta', 'IST', 'India Standard Time'];
-    if (istTzids.includes(tzid)) {
-      offsetMin = 330;
-    } else {
-      // Try resolving via Intl — compute offset for this zone at the given local time
-      try {
-        const guess = new Date(Date.UTC(+y, +mo - 1, +d, +hh, +mm, +ss || 0));
-        const parts = new Intl.DateTimeFormat('en-US', {
-          timeZone: tzid,
-          year: 'numeric', month: '2-digit', day: '2-digit',
-          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-        }).formatToParts(guess).reduce((a, p) => (a[p.type] = p.value, a), {});
-        const localAsUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
-        offsetMin = (guess.getTime() - localAsUtc) / 60000;
-      } catch (e) {
-        offsetMin = 0; // fallback: treat as UTC
-      }
-    }
-  }
-  const utcMs = Date.UTC(+y, +mo - 1, +d, +hh, +mm, +ss || 0) - offsetMin * 60 * 1000;
-  return { date: new Date(utcMs), allDay: false };
-}
-
-function unescapeICal(s) {
-  return (s || '').replace(/\\n/gi, '\n').replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\\\/g, '\\');
-}
+/* =================== iCal (via node-ical) =================== */
+import ical from 'node-ical';
 
 function extractMeetLink(location, description) {
   const text = [location || '', description || ''].join(' ');
@@ -159,41 +119,8 @@ function extractMeetLink(location, description) {
   return null;
 }
 
-function parseIcsEvents(ics) {
-  const events = [];
-  // Unfold line continuations (RFC 5545)
-  const unfolded = ics.replace(/\r?\n[ \t]/g, '');
-  const blocks = unfolded.split(/BEGIN:VEVENT/i).slice(1);
-  for (const block of blocks) {
-    const body = block.split(/END:VEVENT/i)[0];
-    const props = {};
-    const tzids = {};
-    for (const line of body.split(/\r?\n/)) {
-      const m = line.match(/^([A-Z-]+)((?:;[^:]+)?):(.*)$/);
-      if (!m) continue;
-      const key = m[1].toUpperCase();
-      const params = m[2] || '';
-      const val = m[3];
-      props[key] = val;
-      const tzm = params.match(/TZID=([^;:]+)/i);
-      if (tzm) tzids[key] = tzm[1];
-    }
-    if (!props.SUMMARY) continue;
-    if (props.STATUS && props.STATUS.toUpperCase() === 'CANCELLED') continue;
-    const startParsed = parseICalDate(props.DTSTART, tzids.DTSTART);
-    const endParsed = parseICalDate(props.DTEND, tzids.DTEND);
-    if (!startParsed) continue;
-    events.push({
-      uid: props.UID,
-      summary: unescapeICal(props.SUMMARY),
-      location: unescapeICal(props.LOCATION),
-      description: unescapeICal(props.DESCRIPTION),
-      start: startParsed.date,
-      end: endParsed ? endParsed.date : startParsed.date,
-      allDay: startParsed.allDay
-    });
-  }
-  return events;
+function stripHtml(s) {
+  return (s || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
 }
 
 async function fetchTodayMeetings() {
@@ -203,29 +130,106 @@ async function fetchTodayMeetings() {
   }
   try {
     console.log('[meetings] Fetching iCal feed…');
-    const res = await fetch(GCAL_ICAL_URL);
-    console.log('[meetings] iCal HTTP status:', res.status);
-    if (!res.ok) { console.warn('[meetings] iCal non-OK response'); return null; }
-    const text = await res.text();
-    console.log('[meetings] iCal body length:', text.length, 'chars');
-    const events = parseIcsEvents(text);
-    console.log('[meetings] Parsed events total:', events.length);
-    const todayKey = istParts(new Date()).dateKey;
-    console.log('[meetings] Today (IST):', todayKey);
-    const todayEvents = events
-      .filter(e => !e.allDay && istParts(e.start).dateKey === todayKey)
-      .sort((a, b) => a.start - b.start);
-    console.log('[meetings] Today events found:', todayEvents.length);
-    if (todayEvents.length === 0 && events.length > 0) {
-      // Log a sample of what dates we did find, to help diagnose
-      const sample = events.slice(0, 5).map(e => ({
-        summary: e.summary,
-        start: e.start.toISOString(),
-        istDate: istParts(e.start).dateKey
-      }));
-      console.log('[meetings] Sample parsed events (first 5):', JSON.stringify(sample, null, 2));
+    const events = await ical.async.fromURL(GCAL_ICAL_URL);
+    const vevents = Object.values(events).filter(e => e.type === 'VEVENT');
+    console.log('[meetings] VEVENTs loaded:', vevents.length);
+
+    // Today boundaries in IST (00:00 IST = 18:30 prev-day UTC)
+    const todayKey = istParts(new Date()).dateKey; // e.g., "2026-04-23"
+    const istStart = new Date(`${todayKey}T00:00:00+05:30`);
+    const istEnd = new Date(istStart.getTime() + 86400000);
+    console.log('[meetings] IST day window:', istStart.toISOString(), '→', istEnd.toISOString());
+
+    const instances = [];
+
+    for (const ev of vevents) {
+      if (ev.status === 'CANCELLED') continue;
+      if (!ev.start) continue;
+
+      const durationMs = (ev.end && ev.start) ? (ev.end.getTime() - ev.start.getTime()) : 3600000;
+
+      // Gather exceptions (modified single instances) and EXDATEs
+      const exdates = new Set();
+      if (ev.exdate) {
+        for (const k in ev.exdate) {
+          const d = ev.exdate[k];
+          if (d instanceof Date) exdates.add(d.toISOString().slice(0, 10) + 'T' + d.toISOString().slice(11, 16));
+        }
+      }
+      // Recurrence overrides — rescheduled single instances
+      const overrides = {};
+      if (ev.recurrences) {
+        for (const k in ev.recurrences) {
+          const r = ev.recurrences[k];
+          const origKey = new Date(k).toISOString().slice(0, 16);
+          overrides[origKey] = r;
+        }
+      }
+
+      if (ev.rrule) {
+        // Expand recurrences within today's IST window
+        // Pad the search window by ±2 days to catch cross-TZ edge cases
+        const searchStart = new Date(istStart.getTime() - 86400000 * 2);
+        const searchEnd = new Date(istEnd.getTime() + 86400000 * 2);
+        let dates;
+        try {
+          dates = ev.rrule.between(searchStart, searchEnd, true);
+        } catch (e) {
+          console.warn('[meetings] rrule expand failed for', ev.summary, e.message);
+          dates = [];
+        }
+        for (const date of dates) {
+          const origKey = date.toISOString().slice(0, 16);
+          if (exdates.has(origKey)) continue;
+          if (overrides[origKey]) {
+            const ov = overrides[origKey];
+            if (ov.status === 'CANCELLED') continue;
+            const ovStart = ov.start;
+            const ovEnd = ov.end || new Date(ovStart.getTime() + durationMs);
+            if (ovStart >= istStart && ovStart < istEnd) {
+              instances.push({
+                summary: ov.summary || ev.summary,
+                location: ov.location || ev.location,
+                description: stripHtml(ov.description || ev.description),
+                start: ovStart, end: ovEnd
+              });
+            }
+            continue;
+          }
+          if (date >= istStart && date < istEnd) {
+            instances.push({
+              summary: ev.summary,
+              location: ev.location,
+              description: stripHtml(ev.description),
+              start: date,
+              end: new Date(date.getTime() + durationMs)
+            });
+          }
+        }
+      } else if (ev.start >= istStart && ev.start < istEnd) {
+        // Non-recurring
+        instances.push({
+          summary: ev.summary,
+          location: ev.location,
+          description: stripHtml(ev.description),
+          start: ev.start,
+          end: ev.end || new Date(ev.start.getTime() + durationMs)
+        });
+      }
     }
-    return todayEvents;
+
+    // De-dupe (recurrence overrides can double-count if master is also in range)
+    const seen = new Set();
+    const unique = [];
+    for (const m of instances) {
+      const key = m.start.toISOString() + '|' + (m.summary || '');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(m);
+    }
+    unique.sort((a, b) => a.start - b.start);
+    console.log('[meetings] Today instances:', unique.length);
+    return unique;
   } catch (e) {
     console.warn('[meetings] fetch/parse failed:', e.message);
     return null;

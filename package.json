@@ -1,0 +1,9 @@
+{
+  "name": "quest-log-digest",
+  "private": true,
+  "description": "Dependencies for the Morning Digest GitHub Action (not shipped to the app).",
+  "type": "module",
+  "dependencies": {
+    "node-ical": "^0.20.1"
+  }
+}

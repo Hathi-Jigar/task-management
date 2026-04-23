@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Install digest deps
+        run: npm install --omit=dev --no-audit --no-fund
       - name: Send daily digest to Google Chat
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
