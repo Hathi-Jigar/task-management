@@ -359,9 +359,9 @@ function nextRecurrenceDate(deadline, type) {
 }
 
 async function handleRecurring(task) {
-  if (!task.recurring || task.recurring === 'none') return;
+  if (!task.recurring || task.recurring === 'none') return null;
   const nextDeadline = nextRecurrenceDate(task.deadline, task.recurring);
-  await createTask({
+  return createTask({
     title: task.title,
     deadline: nextDeadline,
     recurring: task.recurring,
@@ -565,14 +565,17 @@ function openTaskModal(task = null) {
   $('#taskNotes').value = task ? task.notes : '';
   $('#taskSubmitBtn .btn-label').textContent = task ? '💾 Save Changes' : '⚔️ Scribe Quest';
 
-  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const toLocalDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const toLocalTime = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
   let date, time;
   if (task && task.deadline) {
     const d = new Date(task.deadline);
-    date = d.toISOString().slice(0, 10);
-    time = d.toTimeString().slice(0, 5);
+    date = toLocalDate(d);
+    time = toLocalTime(d);
   } else {
-    date = now.toISOString().slice(0, 10);
+    date = toLocalDate(new Date());
     time = CONFIG.defaultTime;
   }
   $('#taskDate').value = date;
@@ -617,10 +620,14 @@ async function handleTaskSubmit(ev) {
   btn.querySelector('.btn-label').textContent = '⏳ Saving…';
   try {
     const title = $('#taskTitle').value.trim();
-    const date = $('#taskDate').value;
-    const time = $('#taskTime').value || CONFIG.defaultTime;
-    if (!title || !date) { toast('Title and date are required', 'error'); return; }
-    const deadline = new Date(`${date}T${time}`).toISOString();
+    const dateStr = $('#taskDate').value;
+    const timeStr = $('#taskTime').value || CONFIG.defaultTime;
+    if (!title || !dateStr) { toast('Title and date are required', 'error'); return; }
+    const [y, mo, d] = dateStr.split('-').map(Number);
+    const [hh, mm] = timeStr.split(':').map(Number);
+    if (!y || !mo || !d) { toast('Invalid date', 'error'); return; }
+    const deadlineDate = new Date(y, mo - 1, d, isNaN(hh) ? 18 : hh, isNaN(mm) ? 30 : mm, 0, 0);
+    const deadline = deadlineDate.toISOString();
     const data = {
       title,
       deadline,
@@ -629,17 +636,27 @@ async function handleTaskSubmit(ev) {
       tags: [...S.selectedTags]
     };
     if (S.editingTaskId) {
-      await updateTask(S.editingTaskId, data);
+      const updated = await updateTask(S.editingTaskId, data);
+      const idx = S.tasks.findIndex(t => t.id === S.editingTaskId);
+      if (idx >= 0 && updated) S.tasks[idx] = parseTask(updated);
+      S.stats = computeStats(S.tasks);
+      renderAll();
       toast('Quest updated ✓', 'success');
     } else {
-      await createTask(data);
+      const created = await createTask(data);
+      if (created) {
+        const newTask = parseTask(created);
+        S.tasks.unshift(newTask);
+        S.stats = computeStats(S.tasks);
+        renderAll();
+      }
       floatXPAt('+5 XP', window.innerWidth / 2, window.innerHeight / 2);
       sparkle(window.innerWidth / 2, window.innerHeight / 2);
       playSound('add');
       toast('⚔️ Quest scribed!', 'success');
     }
     closeModals();
-    await refresh();
+    refresh().catch(() => {});
   } catch (e) {
     toast('Error: ' + e.message, 'error');
   } finally {
@@ -659,9 +676,26 @@ async function closeTaskFlow(task, ev) {
   burstConfetti(cx / window.innerWidth, cy / window.innerHeight);
   playSound('complete');
   try {
-    await closeTaskApi(task.id);
-    if (task.recurring && task.recurring !== 'none') await handleRecurring(task);
-    setTimeout(() => refresh(), 400);
+    const closed = await closeTaskApi(task.id);
+    const idx = S.tasks.findIndex(t => t.id === task.id);
+    if (idx >= 0 && closed) S.tasks[idx] = parseTask(closed);
+    if (task.recurring && task.recurring !== 'none') {
+      const created = await handleRecurring(task);
+      if (created) S.tasks.unshift(parseTask(created));
+    }
+    const oldStats = S.stats;
+    S.stats = computeStats(S.tasks);
+    if (oldStats && S.stats.level > oldStats.level) showLevelUp(S.stats.level);
+    if (oldStats) {
+      for (const id of S.stats.badges) {
+        if (!oldStats.badges.has(id)) {
+          const b = BADGES.find(bb => bb.id === id);
+          if (b) showBadge(b);
+        }
+      }
+    }
+    setTimeout(() => renderAll(), 400);
+    refresh().catch(() => {});
   } catch (e) {
     if (card) card.classList.remove('closing');
     toast('Could not close: ' + e.message, 'error');
@@ -670,8 +704,12 @@ async function closeTaskFlow(task, ev) {
 
 async function reopenTask(task) {
   try {
-    await reopenTaskApi(task.id);
-    await refresh();
+    const reopened = await reopenTaskApi(task.id);
+    const idx = S.tasks.findIndex(t => t.id === task.id);
+    if (idx >= 0 && reopened) S.tasks[idx] = parseTask(reopened);
+    S.stats = computeStats(S.tasks);
+    renderAll();
+    refresh().catch(() => {});
   } catch (e) { toast('Could not reopen: ' + e.message, 'error'); }
 }
 
@@ -680,7 +718,10 @@ async function deleteTaskFlow(task, card) {
   card.classList.add('removing');
   try {
     await deleteTaskApi(task.id);
-    setTimeout(() => refresh(), 300);
+    S.tasks = S.tasks.filter(t => t.id !== task.id);
+    S.stats = computeStats(S.tasks);
+    setTimeout(() => renderAll(), 300);
+    refresh().catch(() => {});
   } catch (e) {
     card.classList.remove('removing');
     toast('Could not delete: ' + e.message, 'error');
