@@ -826,20 +826,7 @@ code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;
 }
 .fab:hover { transform: scale(1.08) rotate(90deg); }
 .fab:active { transform: scale(0.92); }
-.fab.pulse { animation: fabPulse 1.2s infinite; }
-.fab-plus { line-height: 1; }
-@media (min-width: 900px) {
-  .fab {
-    right: 408px;
-    width: 56px; height: 56px;
-    font-size: 32px;
-  }
-}
-@media (min-width: 1200px) {
-  .fab {
-    right: 448px;
-  }
-}
+.fab { display: none; }
 
 /* ============ MODALS ============ */
 .modal {
