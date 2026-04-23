@@ -2,7 +2,7 @@
  * Network-first for app shell so deploys propagate instantly.
  * Cache acts as offline fallback only.
  */
-const VERSION = 'v2-2026-04-23-network-first';
+const VERSION = 'v3-2026-04-23-merge-refresh';
 const SHELL = [
   './',
   './index.html',

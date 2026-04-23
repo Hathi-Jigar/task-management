@@ -1237,9 +1237,24 @@ async function loadLabels() {
 
 async function refresh() {
   const issues = await fetchAllIssues();
-  S.tasks = issues
+  const serverTasks = issues
     .map(parseTask)
     .filter(t => !(t.issue.labels || []).some(l => l.name === 'deleted'));
+
+  // Merge: preserve any locally-added task that server's list API hasn't
+  // indexed yet (GitHub list endpoint has eventual consistency of several
+  // seconds). Without this the UI flickers: new task appears, then vanishes
+  // when background refresh returns a list that hasn't yet picked it up.
+  const serverIds = new Set(serverTasks.map(t => t.id));
+  const now = Date.now();
+  const pendingLocal = S.tasks.filter(t =>
+    !serverIds.has(t.id) &&
+    t.createdAt &&
+    (now - new Date(t.createdAt).getTime()) < 60_000
+  );
+  S.tasks = pendingLocal.length
+    ? [...pendingLocal, ...serverTasks]
+    : serverTasks;
 
   const oldStats = S.stats;
   S.stats = computeStats(S.tasks);
