@@ -1765,13 +1765,73 @@ function gisReady() {
   return typeof google !== 'undefined' && google.accounts && google.accounts.oauth2;
 }
 
-function waitForGis(timeoutMs = 8000) {
+function showGisBlockedHelp() {
+  const existing = document.getElementById('gisBlockedOverlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'gisBlockedOverlay';
+  overlay.className = 'modal';
+  overlay.innerHTML = `
+    <div class="modal-card" style="max-width:480px">
+      <div class="modal-header">
+        <h2>🚫 Google SDK Blocked</h2>
+        <button class="icon-btn" data-close-modal>✕</button>
+      </div>
+      <p style="font-size:13px;color:#d4c9f0;line-height:1.6;margin-bottom:12px">
+        The Google Identity script (<code>accounts.google.com/gsi/client</code>) didn't load.
+        Calendar integration can't work without it.
+      </p>
+      <p style="font-size:13px;color:#a78bfa;font-weight:600;margin-bottom:8px">Likely causes:</p>
+      <ul style="font-size:13px;color:#d4c9f0;line-height:1.7;padding-left:20px;margin-bottom:16px">
+        <li><strong>Ad blocker / privacy extension</strong> (uBlock, Ghostery, Brave shields, AdGuard) — whitelist this site or pause for this tab</li>
+        <li><strong>Strict tracking protection</strong> — try Safari/Chrome's standard mode, or disable "strict" tracking prevention</li>
+        <li><strong>Corporate / school firewall</strong> — it may block <code>accounts.google.com</code>. Try a different network</li>
+        <li><strong>VPN</strong> — some VPN regions block Google. Try disabling</li>
+      </ul>
+      <p style="font-size:12px;color:#7e72a0;margin-bottom:14px">
+        Test loading the script directly: open <a href="https://accounts.google.com/gsi/client" target="_blank" rel="noopener" style="color:#a78bfa">this link</a> — it should show JavaScript code. If it fails, your network is blocking Google.
+      </p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" data-close-modal>Close</button>
+        <button class="btn btn-primary" id="gisRetryBtn">🔁 Retry</button>
+      </div>
+    </div>
+  `;
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  overlay.querySelectorAll('[data-close-modal]').forEach(b => b.addEventListener('click', () => overlay.remove()));
+  overlay.querySelector('#gisRetryBtn').addEventListener('click', () => {
+    overlay.remove();
+    connectGcal();
+  });
+  document.body.appendChild(overlay);
+}
+
+function waitForGis(timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
+    // If GIS is already loaded, resolve immediately
+    if (gisReady()) return resolve();
+
+    // If the <script> tag is missing (was removed / never added), inject it now
+    const GSI_URL = 'https://accounts.google.com/gsi/client';
+    let scriptEl = document.querySelector(`script[src="${GSI_URL}"]`);
+    if (!scriptEl) {
+      scriptEl = document.createElement('script');
+      scriptEl.src = GSI_URL;
+      scriptEl.async = true;
+      scriptEl.defer = true;
+      document.head.appendChild(scriptEl);
+    }
+
+    // Detect hard failure (blocked by extension / network)
+    let errored = false;
+    scriptEl.addEventListener('error', () => { errored = true; }, { once: true });
+
     const start = Date.now();
     (function poll() {
-      if (gisReady()) resolve();
-      else if (Date.now() - start > timeoutMs) reject(new Error('Google Identity Services failed to load'));
-      else setTimeout(poll, 100);
+      if (gisReady()) return resolve();
+      if (errored) return reject(new Error('Google Identity Services script failed to load (blocked)'));
+      if (Date.now() - start > timeoutMs) return reject(new Error('Google Identity Services timed out'));
+      setTimeout(poll, 120);
     })();
   });
 }
@@ -1795,7 +1855,8 @@ async function connectGcal({ silent = false } = {}) {
   try {
     await waitForGis();
   } catch (e) {
-    toast('Google login SDK blocked. Check your network.', 'error');
+    console.error('GIS load failed:', e);
+    showGisBlockedHelp();
     return;
   }
   ensureGcalClient();
