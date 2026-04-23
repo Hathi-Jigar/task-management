@@ -53,8 +53,13 @@ const S = {
   soundOn: localStorage.getItem('soundOn') !== 'false',
   deferredInstall: null,
   prevLevel: 1,
-  prevBadges: new Set()
+  prevBadges: new Set(),
+  lastRefreshAt: 0,
+  autoRefreshTimer: null
 };
+
+const AUTO_REFRESH_INTERVAL_MS = 90_000; // background poll while visible
+const STALE_THRESHOLD_MS = 30_000;        // auto-refresh on focus if older than this
 
 /* ========== DOM ========== */
 const $ = (sel) => document.querySelector(sel);
@@ -993,6 +998,8 @@ async function refresh() {
     }
   }
   renderAll();
+  S.lastRefreshAt = Date.now();
+  markStaleIfNeeded();
 }
 
 async function loadEverything() {
@@ -1002,9 +1009,59 @@ async function loadEverything() {
   await ensureBaseLabels();
   $('#loadingText').textContent = 'Loading quests…';
   await refresh();
+  S.lastRefreshAt = Date.now();
   $('#loadingScreen').classList.add('gone');
   setTimeout(() => $('#loadingScreen').style.display = 'none', 400);
+  startAutoRefresh();
 }
+
+async function userRefresh({ silent = false } = {}) {
+  if (!S.token) return;
+  const btn = $('#refreshHeroBtn');
+  if (btn) {
+    btn.classList.remove('stale');
+    btn.classList.add('spinning');
+  }
+  try {
+    await refresh();
+    S.lastRefreshAt = Date.now();
+    if (!silent) {
+      const rect = btn ? btn.getBoundingClientRect() : null;
+      const cx = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
+      const cy = rect ? rect.bottom + 10 : 80;
+      floatXPAt('⚡ Synced', cx, cy);
+      playSound('add');
+    }
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
+      navigator.serviceWorker.getRegistration().then(r => r && r.update && r.update()).catch(() => {});
+    }
+  } catch (e) {
+    if (!silent) toast('Refresh failed: ' + e.message, 'error');
+  } finally {
+    setTimeout(() => btn && btn.classList.remove('spinning'), 800);
+  }
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  S.autoRefreshTimer = setInterval(() => {
+    if (document.visibilityState === 'visible' && S.token) {
+      userRefresh({ silent: true }).catch(() => {});
+    }
+  }, AUTO_REFRESH_INTERVAL_MS);
+}
+
+function stopAutoRefresh() {
+  if (S.autoRefreshTimer) { clearInterval(S.autoRefreshTimer); S.autoRefreshTimer = null; }
+}
+
+function markStaleIfNeeded() {
+  const btn = $('#refreshHeroBtn');
+  if (!btn) return;
+  const stale = S.lastRefreshAt && (Date.now() - S.lastRefreshAt > 120_000);
+  btn.classList.toggle('stale', !!stale);
+}
+setInterval(markStaleIfNeeded, 10_000);
 
 /* ========== TABS ========== */
 function switchTab(tab) {
@@ -1128,7 +1185,25 @@ function wireEvents() {
     } catch (e) { toast('Error: ' + e.message, 'error'); }
   });
 
-  $('#refreshBtn').addEventListener('click', async () => { closeModals(); await refresh(); toast('Refreshed ✓', 'success'); });
+  $('#refreshHeroBtn').addEventListener('click', () => userRefresh({ silent: false }));
+  $('#refreshBtn').addEventListener('click', () => { closeModals(); userRefresh({ silent: false }); });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && S.token) {
+      if (!S.lastRefreshAt || Date.now() - S.lastRefreshAt > STALE_THRESHOLD_MS) {
+        userRefresh({ silent: true }).catch(() => {});
+      }
+    }
+  });
+  window.addEventListener('focus', () => {
+    if (S.token && (!S.lastRefreshAt || Date.now() - S.lastRefreshAt > STALE_THRESHOLD_MS)) {
+      userRefresh({ silent: true }).catch(() => {});
+    }
+  });
+  window.addEventListener('pageshow', (e) => {
+    // iOS bfcache: page restored from back-forward cache — always refresh
+    if (e.persisted && S.token) userRefresh({ silent: true }).catch(() => {});
+  });
   $('#soundToggleBtn').addEventListener('click', () => {
     S.soundOn = !S.soundOn;
     localStorage.setItem('soundOn', S.soundOn);
