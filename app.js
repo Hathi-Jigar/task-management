@@ -778,15 +778,20 @@ async function doReopenTask() {
   S.pendingReopenTask = null;
   const btn = $('#confirmReopenBtn');
   btn.disabled = true;
-
   $('#reopenModal').classList.add('hidden');
 
   const xpLoss = computeCloseXP(task);
-  const card = document.querySelector(`.task[data-task-id="${task.id}"]`);
-  const rect = card ? card.getBoundingClientRect() : null;
-  const cx = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
-  const cy = rect ? rect.top + rect.height / 2 : window.innerHeight / 2;
+  // Fire the -XP float in the center of the viewport so it's always visible,
+  // regardless of which tab was active or whether the source card is still in the DOM.
+  const cx = window.innerWidth / 2;
+  const cy = window.innerHeight * 0.4;
   floatLossAt(`−${xpLoss} XP`, cx, cy);
+  // Small red "damage" shake of the hero HP bar to emphasise the loss
+  const hpBar = document.querySelector('.hp-bar');
+  if (hpBar) {
+    hpBar.classList.add('hp-hit');
+    setTimeout(() => hpBar.classList.remove('hp-hit'), 600);
+  }
   playSound('add');
 
   try {
@@ -795,7 +800,20 @@ async function doReopenTask() {
     if (idx >= 0 && reopened) S.tasks[idx] = parseTask(reopened);
     S.stats = computeStats(S.tasks);
     renderAll();
-    toast('Quest reopened — the adventure continues!', 'success');
+
+    // Auto-switch to All tab so the reopened quest is visible
+    switchTab('all');
+    // Highlight the reopened card briefly
+    setTimeout(() => {
+      const card = document.querySelector(`.task[data-task-id="${task.id}"]`);
+      if (card) {
+        card.classList.add('just-reopened');
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => card.classList.remove('just-reopened'), 1800);
+      }
+    }, 50);
+
+    toast(`Quest reopened • −${xpLoss} XP`, 'error');
     refresh().catch(() => {});
   } catch (e) {
     toast('Could not reopen: ' + e.message, 'error');
