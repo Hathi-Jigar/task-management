@@ -77,36 +77,21 @@
 
   <!-- TABS -->
   <nav class="tabs">
-    <button class="tab active" data-tab="today">🎯 Today</button>
-    <button class="tab" data-tab="upcoming">📅 Upcoming</button>
-    <button class="tab" data-tab="all">📋 All</button>
+    <button class="tab active" data-tab="all">📋 All</button>
     <button class="tab" data-tab="done">✅ Done</button>
     <button class="tab" data-tab="badges">🏆 Badges</button>
   </nav>
 
   <!-- CONTENT -->
   <main class="content">
-    <section id="tab-today" class="tab-content active">
-      <div id="overdueList" class="list overdue-list"></div>
-      <div id="todayList" class="list"></div>
-      <div id="todayEmpty" class="empty hidden">
-        <div class="empty-icon">🌤️</div>
-        <div class="empty-title">No quests for today!</div>
-        <div class="empty-sub">Add one to start earning XP.</div>
-      </div>
-    </section>
-
-    <section id="tab-upcoming" class="tab-content">
-      <div id="upcomingList" class="list"></div>
-      <div id="upcomingEmpty" class="empty hidden">
-        <div class="empty-icon">📅</div>
-        <div class="empty-title">Your calendar is clear</div>
-      </div>
-    </section>
-
-    <section id="tab-all" class="tab-content">
+    <section id="tab-all" class="tab-content active">
       <div class="tag-filter" id="tagFilter"></div>
       <div id="allList" class="list"></div>
+      <div id="allEmpty" class="empty hidden">
+        <div class="empty-icon">🌤️</div>
+        <div class="empty-title">No open quests!</div>
+        <div class="empty-sub">Tap + to scribe one and earn XP.</div>
+      </div>
     </section>
 
     <section id="tab-done" class="tab-content">
@@ -209,6 +194,44 @@
     </div>
     <div class="menu-footer">
       <small>Quest Log v1.0 • <a href="https://github.com/Hathi-Jigar/task-management" target="_blank" rel="noopener">source</a></small>
+    </div>
+  </div>
+</div>
+
+<!-- ================= CLOSE CONFIRM MODAL ================= -->
+<div id="closeModal" class="modal hidden">
+  <div class="modal-card confirm-card">
+    <div class="confirm-icon">⚔️</div>
+    <h2>Complete this quest?</h2>
+    <p class="confirm-title" id="confirmCloseTitle"></p>
+    <div class="confirm-reward">
+      <span class="confirm-reward-plus">+</span>
+      <span class="confirm-reward-num" id="confirmCloseXP">15</span>
+      <span class="confirm-reward-xp">XP</span>
+    </div>
+    <p class="confirm-sub" id="confirmCloseSub">Victory awaits, adventurer!</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" data-close-modal>Not yet</button>
+      <button class="btn btn-primary" id="confirmCloseBtn">⚔️ Complete!</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= REOPEN CONFIRM MODAL ================= -->
+<div id="reopenModal" class="modal hidden">
+  <div class="modal-card confirm-card">
+    <div class="confirm-icon">↩️</div>
+    <h2>Reopen this quest?</h2>
+    <p class="confirm-title" id="confirmReopenTitle"></p>
+    <div class="confirm-reward confirm-penalty">
+      <span class="confirm-reward-plus">−</span>
+      <span class="confirm-reward-num" id="confirmReopenXP">15</span>
+      <span class="confirm-reward-xp">XP</span>
+    </div>
+    <p class="confirm-sub">You'll forfeit the reward until re-completed.</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" data-close-modal>Cancel</button>
+      <button class="btn btn-warning" id="confirmReopenBtn">↩️ Reopen</button>
     </div>
   </div>
 </div>

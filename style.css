@@ -251,18 +251,50 @@ code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;
 .tab-content { display: none; animation: fadeIn 0.25s ease-out; }
 .tab-content.active { display: block; }
 .list { display: flex; flex-direction: column; gap: 10px; }
-.overdue-list:not(:empty) { margin-bottom: 16px; }
-.overdue-list::before {
-  content: '⚠️ OVERDUE QUESTS';
-  display: block;
+
+/* ============ SECTION HEADERS ============ */
+.section-header {
   font-family: 'VT323', monospace;
-  font-size: 18px;
-  color: #ff4d6d;
+  font-size: 20px;
   letter-spacing: 2px;
-  margin-bottom: 10px;
-  padding-left: 4px;
+  color: #a78bfa;
+  padding: 4px 4px;
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-header:first-child { margin-top: 0; }
+.section-header .section-count {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  letter-spacing: 0;
+  font-weight: 700;
+  background: rgba(167,139,250,0.2);
+  padding: 2px 8px;
+  border-radius: 10px;
+  color: #d4c9f0;
+}
+.section-header .section-date {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0;
+  font-weight: 500;
+  color: #7e72a0;
+  margin-left: auto;
+}
+.section-header.overdue {
+  color: #ff4d6d;
   text-shadow: 0 0 8px rgba(255, 77, 109, 0.4);
 }
+.section-header.overdue .section-count { background: rgba(255,77,109,0.2); color: #ff4d6d; }
+.section-header.today {
+  color: #ffd700;
+  text-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
+}
+.section-header.today .section-count { background: rgba(255,215,0,0.18); color: #ffd700; }
+.section-header.tomorrow { color: #a78bfa; }
+.section-header.upcoming { color: #86c6ff; }
 
 /* ============ TASK CARD ============ */
 .task {
@@ -367,6 +399,20 @@ code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;
   background: rgba(167,139,250,0.3);
   color: #fff;
   border-color: rgba(167,139,250,0.5);
+}
+.tag-filter-chip.overdue-chip {
+  color: #ff4d6d;
+  border-color: rgba(255,77,109,0.3);
+}
+.tag-filter-chip.overdue-chip.active {
+  background: rgba(255,77,109,0.25);
+  border-color: #ff4d6d;
+  color: #fff;
+  animation: overduePulse 1.6s infinite;
+}
+@keyframes overduePulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(255,77,109,0); }
+  50% { box-shadow: 0 0 12px rgba(255,77,109,0.5); }
 }
 
 /* ============ FAB ============ */
@@ -532,6 +578,69 @@ code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;
 .badge-card-desc { font-size: 11px; color: #a78bfa; line-height: 1.4; }
 .badge-card-date { font-size: 10px; color: #7e72a0; margin-top: 6px; }
 
+/* ============ CONFIRM CARD ============ */
+.confirm-card { text-align: center; max-width: 400px; }
+.confirm-card h2 {
+  font-family: 'VT323', monospace;
+  font-size: 32px;
+  letter-spacing: 2px;
+  color: #ffd700;
+  text-shadow: 0 0 12px rgba(255,215,0,0.4);
+  margin: 8px 0;
+}
+.confirm-icon {
+  font-size: 64px;
+  margin: 6px 0 4px;
+  animation: float 2.5s ease-in-out infinite;
+  filter: drop-shadow(0 0 20px rgba(255,215,0,0.4));
+}
+.confirm-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #d4c9f0;
+  line-height: 1.4;
+  padding: 8px 12px;
+  background: rgba(0,0,0,0.25);
+  border-radius: 10px;
+  margin: 12px 0;
+  word-wrap: break-word;
+}
+.confirm-reward {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: 'VT323', monospace;
+  color: #ffd700;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, rgba(255,215,0,0.12), rgba(255,158,0,0.06));
+  border: 2px solid rgba(255,215,0,0.35);
+  border-radius: 16px;
+  margin: 8px 0 4px;
+  text-shadow: 0 0 10px rgba(255,215,0,0.5);
+  animation: rewardPulse 1.6s ease-in-out infinite;
+}
+.confirm-reward.confirm-penalty {
+  color: #ff4d6d;
+  background: linear-gradient(135deg, rgba(255,77,109,0.12), rgba(200,50,80,0.06));
+  border-color: rgba(255,77,109,0.4);
+  text-shadow: 0 0 10px rgba(255,77,109,0.5);
+}
+.confirm-reward-plus { font-size: 28px; line-height: 1; }
+.confirm-reward-num { font-size: 48px; line-height: 1; font-weight: 700; }
+.confirm-reward-xp { font-size: 22px; letter-spacing: 2px; margin-left: 4px; }
+.confirm-sub { font-size: 13px; color: #a78bfa; margin: 8px 0 4px; }
+.btn-warning {
+  background: linear-gradient(135deg, #ff9e00, #ff4d6d);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(255, 77, 109, 0.35);
+}
+.btn-warning:hover { box-shadow: 0 6px 20px rgba(255, 77, 109, 0.55); }
+
+@keyframes rewardPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 rgba(255,215,0,0); }
+  50% { transform: scale(1.04); box-shadow: 0 0 30px rgba(255,215,0,0.4); }
+}
+
 /* ============ LEVEL UP MODAL ============ */
 .level-up-modal {
   position: fixed; inset: 0;
@@ -635,6 +744,10 @@ code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;
   text-shadow: 0 0 12px rgba(255,215,0,0.8), 0 2px 4px rgba(0,0,0,0.5);
   z-index: 500;
   animation: xpFloat 1.2s ease-out forwards;
+}
+.xp-float.xp-loss {
+  color: #ff4d6d;
+  text-shadow: 0 0 12px rgba(255,77,109,0.8), 0 2px 4px rgba(0,0,0,0.5);
 }
 
 /* ============ ANIMATIONS ============ */

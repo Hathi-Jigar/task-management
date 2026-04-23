@@ -44,7 +44,9 @@ const S = {
   tasks: [],
   labels: [],
   stats: null,
-  activeTab: 'today',
+  activeTab: 'all',
+  pendingCloseTask: null,
+  pendingReopenTask: null,
   activeTagFilter: null,
   editingTaskId: null,
   selectedTags: new Set(),
@@ -455,8 +457,8 @@ function renderTaskCard(task, opts = {}) {
 
   card.querySelector('.task-check').addEventListener('click', (ev) => {
     ev.stopPropagation();
-    if (task.state === 'closed') reopenTask(task);
-    else closeTaskFlow(task, ev);
+    if (task.state === 'closed') askReopenConfirm(task);
+    else askCloseConfirm(task);
   });
   card.querySelector('.edit-btn').addEventListener('click', (ev) => { ev.stopPropagation(); openTaskModal(task); });
   card.querySelector('.del-btn').addEventListener('click', (ev) => { ev.stopPropagation(); deleteTaskFlow(task, card); });
@@ -470,51 +472,62 @@ function renderTaskCard(task, opts = {}) {
 /* ========== UI: RENDER TABS ========== */
 function renderAll() {
   renderHero();
-  renderToday();
-  renderUpcoming();
   renderAllOpen();
   renderDone();
   renderBadgesGrid();
 }
 
-function renderToday() {
-  const now = Date.now();
-  const todayStr = new Date().toDateString();
-  const overdue = S.tasks.filter(t => t.state === 'open' && t.deadline && new Date(t.deadline).getTime() < now && new Date(t.deadline).toDateString() !== todayStr);
-  const today = S.tasks.filter(t => t.state === 'open' && t.deadline && new Date(t.deadline).toDateString() === todayStr);
-  const overdueList = $('#overdueList'); overdueList.innerHTML = '';
-  const todayList = $('#todayList'); todayList.innerHTML = '';
-  overdue.sort((a, b) => new Date(a.deadline) - new Date(b.deadline)).forEach(t => overdueList.appendChild(renderTaskCard(t)));
-  today.sort((a, b) => new Date(a.deadline) - new Date(b.deadline)).forEach(t => todayList.appendChild(renderTaskCard(t)));
-  $('#todayEmpty').classList.toggle('hidden', overdue.length + today.length > 0);
-}
-
-function renderUpcoming() {
-  const now = Date.now();
-  const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
-  const in7d = now + 7 * 86400000;
-  const items = S.tasks.filter(t =>
-    t.state === 'open' && t.deadline &&
-    new Date(t.deadline).getTime() > todayEnd.getTime() &&
-    new Date(t.deadline).getTime() <= in7d
-  ).sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
-  const list = $('#upcomingList'); list.innerHTML = '';
-  items.forEach(t => list.appendChild(renderTaskCard(t)));
-  $('#upcomingEmpty').classList.toggle('hidden', items.length > 0);
+function isOverdue(t) {
+  return t.state === 'open' && t.deadline && new Date(t.deadline).getTime() < Date.now();
 }
 
 function renderAllOpen() {
   renderTagFilter();
   const list = $('#allList'); list.innerHTML = '';
+
   let items = S.tasks.filter(t => t.state === 'open');
-  if (S.activeTagFilter) items = items.filter(t => t.tags.includes(S.activeTagFilter));
-  items.sort((a, b) => {
-    if (!a.deadline) return 1;
-    if (!b.deadline) return -1;
-    return new Date(a.deadline) - new Date(b.deadline);
-  });
-  items.forEach(t => list.appendChild(renderTaskCard(t)));
-  if (!items.length) list.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">No open quests</div></div>';
+  if (S.activeTagFilter === '__overdue__') {
+    items = items.filter(isOverdue);
+  } else if (S.activeTagFilter) {
+    items = items.filter(t => t.tags.includes(S.activeTagFilter));
+  }
+
+  $('#allEmpty').classList.toggle('hidden', items.length > 0);
+  if (!items.length) return;
+
+  const now = Date.now();
+  const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
+  const startTomorrow = new Date(startToday); startTomorrow.setDate(startTomorrow.getDate() + 1);
+  const startDayAfter = new Date(startTomorrow); startDayAfter.setDate(startDayAfter.getDate() + 1);
+
+  const sections = { overdue: [], today: [], tomorrow: [], upcoming: [], noDeadline: [] };
+  for (const t of items) {
+    if (!t.deadline) { sections.noDeadline.push(t); continue; }
+    const d = new Date(t.deadline);
+    if (d.getTime() < now) sections.overdue.push(t);
+    else if (d >= startToday && d < startTomorrow) sections.today.push(t);
+    else if (d >= startTomorrow && d < startDayAfter) sections.tomorrow.push(t);
+    else sections.upcoming.push(t);
+  }
+
+  const byDeadline = (a, b) => new Date(a.deadline) - new Date(b.deadline);
+  Object.values(sections).forEach(arr => arr.sort(byDeadline));
+
+  const fmtDate = d => d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+
+  const addSection = (arr, icon, label, headerCls, dateStr) => {
+    if (!arr.length) return;
+    const header = el('div', `section-header ${headerCls}`);
+    header.innerHTML = `<span>${icon} ${escapeHTML(label)}</span><span class="section-count">${arr.length}</span>${dateStr ? `<span class="section-date">${escapeHTML(dateStr)}</span>` : ''}`;
+    list.appendChild(header);
+    arr.forEach(t => list.appendChild(renderTaskCard(t)));
+  };
+
+  addSection(sections.overdue, '⚠️', 'OVERDUE', 'overdue');
+  addSection(sections.today, '🎯', 'TODAY', 'today', fmtDate(startToday));
+  addSection(sections.tomorrow, '📅', 'TOMORROW', 'tomorrow', fmtDate(startTomorrow));
+  addSection(sections.upcoming, '🗓️', 'UPCOMING', 'upcoming');
+  addSection(sections.noDeadline, '🕐', 'NO DEADLINE', '');
 }
 
 function renderDone() {
@@ -528,15 +541,32 @@ function renderDone() {
 
 function renderTagFilter() {
   const wrap = $('#tagFilter'); wrap.innerHTML = '';
-  const tagsInUse = new Set(S.tasks.filter(t => t.state === 'open').flatMap(t => t.tags));
+  const openTasks = S.tasks.filter(t => t.state === 'open');
+  const tagsInUse = new Set(openTasks.flatMap(t => t.tags));
+  const overdueCount = openTasks.filter(isOverdue).length;
+
   const allChip = el('div', `tag-filter-chip ${!S.activeTagFilter ? 'active' : ''}`, 'All');
   allChip.addEventListener('click', () => { S.activeTagFilter = null; renderAllOpen(); });
   wrap.appendChild(allChip);
+
+  if (overdueCount > 0) {
+    const active = S.activeTagFilter === '__overdue__';
+    const ovChip = el('div', `tag-filter-chip overdue-chip ${active ? 'active' : ''}`, `⚠️ Overdue (${overdueCount})`);
+    ovChip.addEventListener('click', () => {
+      S.activeTagFilter = active ? null : '__overdue__';
+      renderAllOpen();
+    });
+    wrap.appendChild(ovChip);
+  }
+
   [...tagsInUse].sort().forEach(tname => {
     const chip = el('div', `tag-filter-chip ${S.activeTagFilter === tname ? 'active' : ''}`, escapeHTML(tname));
     const lbl = S.labels.find(l => l.name === tname);
     if (lbl && S.activeTagFilter === tname) chip.style.background = `#${lbl.color}55`;
-    chip.addEventListener('click', () => { S.activeTagFilter = tname; renderAllOpen(); });
+    chip.addEventListener('click', () => {
+      S.activeTagFilter = S.activeTagFilter === tname ? null : tname;
+      renderAllOpen();
+    });
     wrap.appendChild(chip);
   });
 }
@@ -665,16 +695,41 @@ async function handleTaskSubmit(ev) {
 }
 
 /* ========== CLOSE / REOPEN / DELETE ========== */
-async function closeTaskFlow(task, ev) {
-  const card = ev.target.closest('.task');
+function askCloseConfirm(task) {
+  S.pendingCloseTask = task;
+  const xp = computeCloseXP({ ...task, closedAt: new Date().toISOString() });
+  $('#confirmCloseTitle').textContent = task.title;
+  $('#confirmCloseXP').textContent = xp;
+  const isLate = task.deadline && new Date(task.deadline).getTime() < Date.now();
+  $('#confirmCloseSub').textContent = isLate
+    ? 'Better late than never — claim your reward!'
+    : 'Victory awaits, adventurer!';
+  $('#closeModal').classList.remove('hidden');
+  playSound('add');
+}
+
+async function doCloseTask() {
+  const task = S.pendingCloseTask;
+  if (!task) return;
+  S.pendingCloseTask = null;
+
+  const btn = $('#confirmCloseBtn');
+  btn.disabled = true;
+
+  const card = document.querySelector(`.task[data-task-id="${task.id}"]`);
   if (card) card.classList.add('closing');
-  const rect = ev.target.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
+
+  const rect = card ? card.getBoundingClientRect() : null;
+  const cx = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
+  const cy = rect ? rect.top + rect.height / 2 : window.innerHeight / 2;
   const xpReward = computeCloseXP({ ...task, closedAt: new Date().toISOString() });
+
+  $('#closeModal').classList.add('hidden');
   floatXPAt(`+${xpReward} XP`, cx, cy);
   burstConfetti(cx / window.innerWidth, cy / window.innerHeight);
+  setTimeout(() => burstConfetti(Math.random(), Math.random() * 0.3), 150);
   playSound('complete');
+
   try {
     const closed = await closeTaskApi(task.id);
     const idx = S.tasks.findIndex(t => t.id === task.id);
@@ -699,18 +754,49 @@ async function closeTaskFlow(task, ev) {
   } catch (e) {
     if (card) card.classList.remove('closing');
     toast('Could not close: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
   }
 }
 
-async function reopenTask(task) {
+function askReopenConfirm(task) {
+  S.pendingReopenTask = task;
+  const xp = computeCloseXP(task);
+  $('#confirmReopenTitle').textContent = task.title;
+  $('#confirmReopenXP').textContent = xp;
+  $('#reopenModal').classList.remove('hidden');
+}
+
+async function doReopenTask() {
+  const task = S.pendingReopenTask;
+  if (!task) return;
+  S.pendingReopenTask = null;
+  const btn = $('#confirmReopenBtn');
+  btn.disabled = true;
+
+  $('#reopenModal').classList.add('hidden');
+
+  const xpLoss = computeCloseXP(task);
+  const card = document.querySelector(`.task[data-task-id="${task.id}"]`);
+  const rect = card ? card.getBoundingClientRect() : null;
+  const cx = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
+  const cy = rect ? rect.top + rect.height / 2 : window.innerHeight / 2;
+  floatLossAt(`−${xpLoss} XP`, cx, cy);
+  playSound('add');
+
   try {
     const reopened = await reopenTaskApi(task.id);
     const idx = S.tasks.findIndex(t => t.id === task.id);
     if (idx >= 0 && reopened) S.tasks[idx] = parseTask(reopened);
     S.stats = computeStats(S.tasks);
     renderAll();
+    toast('Quest reopened — the adventure continues!', 'success');
     refresh().catch(() => {});
-  } catch (e) { toast('Could not reopen: ' + e.message, 'error'); }
+  } catch (e) {
+    toast('Could not reopen: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function deleteTaskFlow(task, card) {
@@ -797,6 +883,14 @@ function burstConfetti(xRatio = 0.5, yRatio = 0.5) {
 
 function floatXPAt(text, x, y) {
   const f = el('div', 'xp-float', text);
+  f.style.left = `${x}px`;
+  f.style.top = `${y}px`;
+  document.body.appendChild(f);
+  setTimeout(() => f.remove(), 1300);
+}
+
+function floatLossAt(text, x, y) {
+  const f = el('div', 'xp-float xp-loss', text);
   f.style.left = `${x}px`;
   f.style.top = `${y}px`;
   document.body.appendChild(f);
@@ -1046,6 +1140,8 @@ function wireEvents() {
   $('#installBtn').addEventListener('click', installApp);
   $('#logoutBtn').addEventListener('click', logout);
   $('#levelUpClose').addEventListener('click', () => $('#levelUpModal').classList.add('hidden'));
+  $('#confirmCloseBtn').addEventListener('click', doCloseTask);
+  $('#confirmReopenBtn').addEventListener('click', doReopenTask);
 
   $$('[data-close-modal]').forEach(b => b.addEventListener('click', closeModals));
   $$('.modal').forEach(m => {
