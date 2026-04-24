@@ -100,11 +100,16 @@
         </section>
 
         <section id="tab-delegated" class="tab-content">
+          <div class="tag-filter">
+            <button id="delegatedAddBtn" class="filter-add-btn" title="Assign a quest to someone else">
+              <span style="font-size:16px;line-height:1">+</span> <span>New Delegated Quest</span>
+            </button>
+          </div>
           <div id="delegatedList" class="list"></div>
           <div id="delegatedEmpty" class="empty hidden">
             <div class="empty-icon">👥</div>
             <div class="empty-title">Nothing delegated</div>
-            <div class="empty-sub">Assign a quest to someone in the "Assigned to" field. Tracking only — no XP.</div>
+            <div class="empty-sub">Use the button above to assign a quest to someone. Tracking only — no XP.</div>
           </div>
         </section>
 
@@ -168,8 +173,10 @@
       <label>Quest Title *</label>
       <input id="taskTitle" type="text" required placeholder="Slay the dragon of procrastination..." maxlength="200" />
 
-      <label>Assigned to <span style="color:#7e72a0;font-weight:400;font-size:12px">(leave empty for yourself)</span></label>
-      <input id="taskAssignee" type="text" placeholder="e.g. Raj Patel" maxlength="80" />
+      <div id="taskAssigneeRow" class="hidden">
+        <label>Assigned to <span id="taskAssigneeHint" style="color:#7e72a0;font-weight:400;font-size:12px"></span></label>
+        <input id="taskAssignee" type="text" placeholder="e.g. Raj Patel" maxlength="80" />
+      </div>
 
       <div class="row">
         <div class="col">

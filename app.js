@@ -49,6 +49,7 @@ const S = {
   pendingReopenTask: null,
   activeTagFilter: null,
   editingTaskId: null,
+  modalMode: 'mine',
   selectedTags: new Set(),
   soundOn: localStorage.getItem('soundOn') !== 'false',
   deferredInstall: null,
@@ -733,11 +734,11 @@ function renderTagFilter() {
   const tagsInUse = new Set(openTasks.flatMap(t => t.tags));
   const overdueCount = openTasks.filter(isOverdue).length;
 
-  // Inline "+ New Quest" button — primary CTA in the filter row
+  // Inline "+ New Quest" button on the Mine tab — always self-assigned.
   const addBtn = el('button', 'filter-add-btn');
   addBtn.innerHTML = '<span style="font-size:16px;line-height:1">+</span> <span>New Quest</span>';
-  addBtn.title = 'Add a new quest';
-  addBtn.addEventListener('click', () => openTaskModal());
+  addBtn.title = 'Add a new quest for yourself';
+  addBtn.addEventListener('click', () => openTaskModal(null, { mode: 'mine' }));
   wrap.appendChild(addBtn);
 
   const allChip = el('div', `tag-filter-chip ${!S.activeTagFilter ? 'active' : ''}`, 'All');
@@ -783,16 +784,41 @@ function renderBadgesGrid() {
 /* ========== TASK MODAL ========== */
 let modalPhotoCtl = null;
 
-function openTaskModal(task = null) {
+function openTaskModal(task = null, { mode } = {}) {
   S.editingTaskId = task ? task.id : null;
   S.selectedTags = new Set(task ? task.tags : []);
-  $('#taskModalTitle').textContent = task ? '✏️ Edit Quest' : '⚔️ New Quest';
+
+  // Resolve mode. Explicit param wins; otherwise infer from existing task
+  // (assignee present ⇒ delegated) or the active tab (for "+ new" flows).
+  let resolvedMode = mode;
+  if (!resolvedMode) {
+    if (task) resolvedMode = task.assignee ? 'delegated' : 'mine';
+    else resolvedMode = S.activeTab === 'delegated' ? 'delegated' : 'mine';
+  }
+  S.modalMode = resolvedMode;
+
+  const assigneeRow = $('#taskAssigneeRow');
+  const assigneeInput = $('#taskAssignee');
+  const assigneeHint = $('#taskAssigneeHint');
+  if (resolvedMode === 'delegated') {
+    assigneeRow.classList.remove('hidden');
+    assigneeInput.required = true;
+    assigneeHint.textContent = '(required — who is doing this?)';
+    $('#taskModalTitle').textContent = task ? '✏️ Edit Delegated Quest' : '👥 New Delegated Quest';
+  } else {
+    assigneeRow.classList.add('hidden');
+    assigneeInput.required = false;
+    assigneeInput.value = '';
+    $('#taskModalTitle').textContent = task ? '✏️ Edit Quest' : '⚔️ New Quest';
+  }
+
   $('#taskTitle').value = task ? task.title : '';
-  $('#taskAssignee').value = task ? task.assignee || '' : '';
+  if (resolvedMode === 'delegated') $('#taskAssignee').value = task ? task.assignee || '' : '';
   $('#taskRecurring').value = task ? task.recurring || 'none' : 'none';
   const existingNotes = task ? task.notes : '';
   $('#taskNotes').value = notesTextOnly(existingNotes);
-  $('#taskSubmitBtn .btn-label').textContent = task ? '💾 Save Changes' : '⚔️ Scribe Quest';
+  const scribeLabel = resolvedMode === 'delegated' ? '👥 Assign Quest' : '⚔️ Scribe Quest';
+  $('#taskSubmitBtn .btn-label').textContent = task ? '💾 Save Changes' : scribeLabel;
 
   // Photo strip
   const mount = $('#taskPhotoStripMount');
@@ -884,11 +910,18 @@ async function handleTaskSubmit(ev) {
       }).filter(Boolean);
     })() : [];
     const textNotes = $('#taskNotes').value.trim();
+    // 'mine' mode hides the assignee field → always self-assigned.
+    // 'delegated' requires a non-empty name (HTML `required` + safety net here).
+    const assignee = S.modalMode === 'delegated' ? $('#taskAssignee').value.trim() : '';
+    if (S.modalMode === 'delegated' && !assignee) {
+      toast('Assignee name is required for delegated quests', 'error');
+      return;
+    }
     const data = {
       title,
       deadline,
       recurring: $('#taskRecurring').value,
-      assignee: $('#taskAssignee').value.trim(),
+      assignee,
       notes: combineNotes(textNotes, modalPhotos),
       tags: [...S.selectedTags]
     };
@@ -1454,7 +1487,13 @@ function wireEvents() {
   $('#loginBtn').addEventListener('click', onLogin);
   $('#tokenInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') onLogin(); });
 
-  $('#fab').addEventListener('click', () => openTaskModal());
+  $('#fab').addEventListener('click', () => {
+    // FAB follows the active tab so you never accidentally assign to yourself
+    // when you're browsing Delegated, or vice-versa.
+    const mode = S.activeTab === 'delegated' ? 'delegated' : 'mine';
+    openTaskModal(null, { mode });
+  });
+  $('#delegatedAddBtn')?.addEventListener('click', () => openTaskModal(null, { mode: 'delegated' }));
   $('#menuBtn').addEventListener('click', () => $('#menuModal').classList.remove('hidden'));
   $('#heroName').addEventListener('click', () => changeName());
   $('#avatar').addEventListener('click', () => changeName());
