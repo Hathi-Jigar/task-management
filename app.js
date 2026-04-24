@@ -1025,32 +1025,76 @@ function renderNoteRow(meeting, note) {
 }
 
 function beginEditNote(meeting, note, row) {
+  // Mirror the task-note inline edit pattern: textarea inside a highlighted
+  // wrap, blur-to-save (unless focus stays inside the editor), Esc to cancel,
+  // ⌘/Ctrl+Enter to save. Plain Enter inserts a newline so multi-line notes
+  // (like a short paragraph) work the same way as task notes.
   const bodyEl = row.querySelector('.meeting-note-body');
-  const textEl = row.querySelector('.meeting-note-text');
+  if (!bodyEl || bodyEl.querySelector('.task-notes-edit-wrap')) return;
+
   const original = note.text;
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'meeting-note-edit-input';
-  input.value = original;
-  input.maxLength = 500;
-  textEl.replaceWith(input);
-  input.focus();
-  input.setSelectionRange(input.value.length, input.value.length);
+
+  const editWrap = el('div', 'task-notes-edit-wrap');
+  const ta = document.createElement('textarea');
+  ta.className = 'task-notes-edit';
+  ta.rows = Math.max(2, Math.min(6, original.split('\n').length + 1));
+  ta.value = original;
+  ta.placeholder = 'Edit note… (tap outside to save, Esc to cancel)';
+  ta.maxLength = 500;
+
+  const hint = el('div', 'task-notes-edit-hint', '<span class="note-save-status">📝 Editing…</span>');
+
+  editWrap.appendChild(ta);
+  editWrap.appendChild(hint);
+
+  // Swap the text display for the editor; keep status chip visible below.
+  bodyEl.innerHTML = '';
+  bodyEl.appendChild(editWrap);
+
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
 
   let done = false;
-  const commit = async (save) => {
+  let cancelled = false;
+
+  const finish = async () => {
     if (done) return;
     done = true;
-    if (save && input.value.trim() && input.value.trim() !== original) {
-      await updateNoteInMeeting(meeting.id, note.num, input.value.trim());
-    } else {
+    const newText = cancelled ? original : ta.value.trim();
+    if (cancelled || !newText || newText === original) {
       renderMeetingsTab();
+      return;
+    }
+    ta.disabled = true;
+    hint.querySelector('.note-save-status').textContent = '⏳ Saving…';
+    try {
+      await updateNoteInMeeting(meeting.id, note.num, newText);
+      // updateNoteInMeeting already re-renders on success
+    } catch (e) {
+      toast('Could not save note: ' + e.message, 'error');
+      done = false;
+      ta.disabled = false;
+      hint.querySelector('.note-save-status').textContent = '⚠️ Retry';
     }
   };
-  input.addEventListener('blur', () => commit(true));
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); commit(true); }
-    else if (e.key === 'Escape') { e.preventDefault(); commit(false); }
+
+  ta.addEventListener('blur', (e) => {
+    // Don't exit edit mode if focus moved to the hint or elsewhere within
+    // the editor wrap — matches how task notes behave with the photo strip.
+    const next = e.relatedTarget;
+    if (next && editWrap.contains(next)) return;
+    finish();
+  });
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelled = true;
+      ta.blur();
+    } else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      ta.blur();
+    }
+    // Plain Enter inserts a newline (default textarea behavior).
   });
 }
 
