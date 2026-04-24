@@ -1,0 +1,1259 @@
+{
+  "generatedAt": "2026-04-24T05:26:24.860Z",
+  "window": {
+    "start": "2026-04-16T18:30:00.000Z",
+    "end": "2026-05-01T18:30:00.000Z"
+  },
+  "events": [
+    {
+      "id": "anu203ueq4d92l7dak78iodsmb_R20260414T053000@google.com|2026-04-17T05:30:00.000Z",
+      "summary": "digiQC Daily Morning Update Call",
+      "start": {
+        "dateTime": "2026-04-17T05:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-17T05:45:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/jcm-pjkp-gkj\nOr dial: (US) +1 503-917-5822 PIN: 665953473#\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/jcm-pjkp-gkj",
+      "meetLink": {
+        "url": "https://meet.google.com/jcm-pjkp-gkj",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jainik@digiqc.com",
+          "displayName": "jainik@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "varun@digiqc.com",
+          "displayName": "varun@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "mayank@digiqc.com",
+          "displayName": "mayank@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jay@digiqc.com",
+          "displayName": "jay@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "ankit@digiqc.com",
+          "displayName": "ankit@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "jigar@digiqc.com",
+        "email": "jigar@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "6duprdj17peejfnq59cdfvdquq_R20260417T083000@google.com|2026-04-17T08:30:00.000Z",
+      "summary": "digiQC Tech standup call",
+      "start": {
+        "dateTime": "2026-04-17T08:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-17T09:00:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/jaw-jgud-npa\nOr dial: (US) +1 470-241-4947 PIN: 272294868#\nMore phone numbers: https://tel.meet/jaw-jgud-npa?pin=6703238680332&hs=7\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/jaw-jgud-npa",
+      "meetLink": {
+        "url": "https://meet.google.com/jaw-jgud-npa",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "nachiket@digiqc.com",
+          "displayName": "nachiket@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jainik@digiqc.com",
+          "displayName": "jainik@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "varun@digiqc.com",
+          "displayName": "varun@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "sweety@digiqc.com",
+          "displayName": "mayank@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "patel.nachiket.r@gmail.com",
+          "displayName": "patel.nachiket.r@gmail.com",
+          "resource": false
+        },
+        {
+          "email": "jay@digiqc.com",
+          "displayName": "jay@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "ankit@digiqc.com",
+          "displayName": "ankit@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "jigar@digiqc.com",
+        "email": "jigar@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "vsfvfke5kuf4hitqsm3rv7dek6_R20260413T043000@google.com|2026-04-20T04:30:00.000Z",
+      "summary": "Meeting with Product Owner",
+      "start": {
+        "dateTime": "2026-04-20T04:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-20T05:30:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/ygh-nifz-tiq\nOr dial: (US) +1 470-499-3934 PIN: 212660354#\nMore phone numbers: https://tel.meet/ygh-nifz-tiq?pin=9638606509144&hs=7\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/ygh-nifz-tiq",
+      "meetLink": {
+        "url": "https://meet.google.com/ygh-nifz-tiq",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "nachiket@logicwind.com",
+          "displayName": "nachiket@logicwind.com",
+          "resource": false
+        },
+        {
+          "email": "sumant@digiqc.com",
+          "displayName": "sumant@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jainik@digiqc.com",
+          "displayName": "jainik@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "patel.nachiket.r@gmail.com",
+          "displayName": "patel.nachiket.r@gmail.com",
+          "resource": false
+        },
+        {
+          "email": "varun@digiqc.com",
+          "displayName": "varun@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "mayank@digiqc.com",
+          "displayName": "mayank@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "support@digiqc.com",
+          "displayName": "support@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jay@digiqc.com",
+          "displayName": "jay@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "ankit@digiqc.com",
+          "displayName": "ankit@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "jigar@digiqc.com",
+        "email": "jigar@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "36j4hdlmgeb6v2hvu40om3vp0b@google.com|2026-04-20T09:00:00.000Z",
+      "summary": "IIT work",
+      "start": {
+        "dateTime": "2026-04-20T09:00:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-20T09:30:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/fuu-zzrh-xpb\nOr dial: (US) +1 251-262-4102 PIN: 651211317#\nMore phone numbers: https://tel.meet/fuu-zzrh-xpb?pin=1961563530208&hs=7\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/fuu-zzrh-xpb",
+      "meetLink": {
+        "url": "https://meet.google.com/fuu-zzrh-xpb",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "vaishali@digiqc.com",
+          "displayName": "vaishali@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "jigar@digiqc.com",
+        "email": "jigar@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "anu203ueq4d92l7dak78iodsmb_R20260414T053000@google.com|2026-04-21T05:30:00.000Z",
+      "summary": "digiQC Daily Morning Update Call",
+      "start": {
+        "dateTime": "2026-04-21T05:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-21T05:45:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/jcm-pjkp-gkj\nOr dial: (US) +1 503-917-5822 PIN: 665953473#\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/jcm-pjkp-gkj",
+      "meetLink": {
+        "url": "https://meet.google.com/jcm-pjkp-gkj",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jainik@digiqc.com",
+          "displayName": "jainik@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "varun@digiqc.com",
+          "displayName": "varun@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "mayank@digiqc.com",
+          "displayName": "mayank@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jay@digiqc.com",
+          "displayName": "jay@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "ankit@digiqc.com",
+          "displayName": "ankit@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "jigar@digiqc.com",
+        "email": "jigar@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "4jv4nep4crrr1ho3b8lcdocj6v@google.com|2026-04-21T06:30:00.000Z",
+      "summary": "meeting with jigar sir",
+      "start": {
+        "dateTime": "2026-04-21T06:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-21T07:00:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/jpq-vzpv-hsj\nOr dial: (US) +1 402-864-0333 PIN: 434981408#\nMore phone numbers: https://tel.meet/jpq-vzpv-hsj?pin=3449760676632&hs=7\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/jpq-vzpv-hsj",
+      "meetLink": {
+        "url": "https://meet.google.com/jpq-vzpv-hsj",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "support@digiqc.com",
+          "displayName": "support@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "support@digiqc.com",
+        "email": "support@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "6lj3eo9i68qjabb160r62b9k68sm6bb1clj38b9j6cq64p1p6kp66cj2cc_R20260401T043000@google.com|2026-04-22T04:30:00.000Z",
+      "summary": "Customer Onboarding & Implementation",
+      "start": {
+        "dateTime": "2026-04-22T04:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-22T05:00:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/uej-znxf-cpg\nOr dial: (US) +1 513-813-1570 PIN: 305029383#\nMore phone numbers: https://tel.meet/uej-znxf-cpg?pin=5765675914377&hs=7\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/uej-znxf-cpg",
+      "meetLink": {
+        "url": "https://meet.google.com/uej-znxf-cpg",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "sohini@digiqc.com",
+          "displayName": "sohini@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "sumant@digiqc.com",
+          "displayName": "sumant@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jyoti@digiqc.com",
+          "displayName": "jyoti@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "support@digiqc.com",
+          "displayName": "support@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "mokshika@digiqc.com",
+          "displayName": "mokshika@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "sumant@digiqc.com",
+        "email": "sumant@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "anu203ueq4d92l7dak78iodsmb_R20260414T053000@google.com|2026-04-22T05:30:00.000Z",
+      "summary": "digiQC Daily Morning Update Call",
+      "start": {
+        "dateTime": "2026-04-22T05:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-22T05:45:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/jcm-pjkp-gkj\nOr dial: (US) +1 503-917-5822 PIN: 665953473#\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/jcm-pjkp-gkj",
+      "meetLink": {
+        "url": "https://meet.google.com/jcm-pjkp-gkj",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jainik@digiqc.com",
+          "displayName": "jainik@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "varun@digiqc.com",
+          "displayName": "varun@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "mayank@digiqc.com",
+          "displayName": "mayank@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jay@digiqc.com",
+          "displayName": "jay@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "ankit@digiqc.com",
+          "displayName": "ankit@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "jigar@digiqc.com",
+        "email": "jigar@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "96m3uqlsf5mne6afgl0nq78nne_R20260408T083000@google.com|2026-04-22T08:30:00.000Z",
+      "summary": "digiQC tech standup call (Wednesday)",
+      "start": {
+        "dateTime": "2026-04-22T08:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-22T09:00:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/aiw-yrap-giu\nOr dial: (US) +1 636-452-0157 PIN: 276072540#\nMore phone numbers: https://tel.meet/aiw-yrap-giu?pin=5908537562438&hs=7\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/aiw-yrap-giu",
+      "meetLink": {
+        "url": "https://meet.google.com/aiw-yrap-giu",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "nachiket@digiqc.com",
+          "displayName": "nachiket@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jainik@digiqc.com",
+          "displayName": "jainik@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "varun@digiqc.com",
+          "displayName": "varun@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "mayank@digiqc.com",
+          "displayName": "mayank@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "patel.nachiket.r@gmail.com",
+          "displayName": "patel.nachiket.r@gmail.com",
+          "resource": false
+        },
+        {
+          "email": "jay@digiqc.com",
+          "displayName": "jay@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "ankit@digiqc.com",
+          "displayName": "ankit@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "jigar@digiqc.com",
+        "email": "jigar@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "anu203ueq4d92l7dak78iodsmb_R20260414T053000@google.com|2026-04-23T05:30:00.000Z",
+      "summary": "digiQC Daily Morning Update Call",
+      "start": {
+        "dateTime": "2026-04-23T05:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-23T05:45:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/jcm-pjkp-gkj\nOr dial: (US) +1 503-917-5822 PIN: 665953473#\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/jcm-pjkp-gkj",
+      "meetLink": {
+        "url": "https://meet.google.com/jcm-pjkp-gkj",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jainik@digiqc.com",
+          "displayName": "jainik@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "varun@digiqc.com",
+          "displayName": "varun@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "mayank@digiqc.com",
+          "displayName": "mayank@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jay@digiqc.com",
+          "displayName": "jay@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "ankit@digiqc.com",
+          "displayName": "ankit@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "jigar@digiqc.com",
+        "email": "jigar@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "anu203ueq4d92l7dak78iodsmb_R20260414T053000@google.com|2026-04-24T05:30:00.000Z",
+      "summary": "digiQC Daily Morning Update Call",
+      "start": {
+        "dateTime": "2026-04-24T05:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-24T05:45:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/jcm-pjkp-gkj\nOr dial: (US) +1 503-917-5822 PIN: 665953473#\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/jcm-pjkp-gkj",
+      "meetLink": {
+        "url": "https://meet.google.com/jcm-pjkp-gkj",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jainik@digiqc.com",
+          "displayName": "jainik@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "varun@digiqc.com",
+          "displayName": "varun@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "mayank@digiqc.com",
+          "displayName": "mayank@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jay@digiqc.com",
+          "displayName": "jay@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "ankit@digiqc.com",
+          "displayName": "ankit@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "jigar@digiqc.com",
+        "email": "jigar@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "6duprdj17peejfnq59cdfvdquq_R20260417T083000@google.com|2026-04-24T08:30:00.000Z",
+      "summary": "digiQC Tech standup call",
+      "start": {
+        "dateTime": "2026-04-24T08:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-24T09:00:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/jaw-jgud-npa\nOr dial: (US) +1 470-241-4947 PIN: 272294868#\nMore phone numbers: https://tel.meet/jaw-jgud-npa?pin=6703238680332&hs=7\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/jaw-jgud-npa",
+      "meetLink": {
+        "url": "https://meet.google.com/jaw-jgud-npa",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "nachiket@digiqc.com",
+          "displayName": "nachiket@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jainik@digiqc.com",
+          "displayName": "jainik@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "varun@digiqc.com",
+          "displayName": "varun@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "sweety@digiqc.com",
+          "displayName": "mayank@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "patel.nachiket.r@gmail.com",
+          "displayName": "patel.nachiket.r@gmail.com",
+          "resource": false
+        },
+        {
+          "email": "jay@digiqc.com",
+          "displayName": "jay@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "ankit@digiqc.com",
+          "displayName": "ankit@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "jigar@digiqc.com",
+        "email": "jigar@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "q3ie4tsv3vsj4pfotou950si4s@google.com|2026-04-27T03:10:00.000Z",
+      "summary": "Flight to BLR (6E 6009)",
+      "start": {
+        "dateTime": "2026-04-27T03:10:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-27T05:05:00.000Z"
+      },
+      "location": "",
+      "description": "To see detailed information for automatically created events like this one, use the official Google Calendar app. https://g.co/calendar\n\nThis event was created from an email you received in Gmail. https://mail.google.com/mail?extsrc=cal&plid=ACUX6DNxJsyRplMvQJcMQZeYThZkUszEXrR2Xk4",
+      "hangoutLink": null,
+      "meetLink": null,
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": null,
+      "status": "confirmed"
+    },
+    {
+      "id": "vsfvfke5kuf4hitqsm3rv7dek6_R20260413T043000@google.com|2026-04-27T04:30:00.000Z",
+      "summary": "Meeting with Product Owner",
+      "start": {
+        "dateTime": "2026-04-27T04:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-27T05:30:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/ygh-nifz-tiq\nOr dial: (US) +1 470-499-3934 PIN: 212660354#\nMore phone numbers: https://tel.meet/ygh-nifz-tiq?pin=9638606509144&hs=7\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/ygh-nifz-tiq",
+      "meetLink": {
+        "url": "https://meet.google.com/ygh-nifz-tiq",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "nachiket@logicwind.com",
+          "displayName": "nachiket@logicwind.com",
+          "resource": false
+        },
+        {
+          "email": "sumant@digiqc.com",
+          "displayName": "sumant@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jainik@digiqc.com",
+          "displayName": "jainik@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "patel.nachiket.r@gmail.com",
+          "displayName": "patel.nachiket.r@gmail.com",
+          "resource": false
+        },
+        {
+          "email": "varun@digiqc.com",
+          "displayName": "varun@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "mayank@digiqc.com",
+          "displayName": "mayank@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "support@digiqc.com",
+          "displayName": "support@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jay@digiqc.com",
+          "displayName": "jay@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "ankit@digiqc.com",
+          "displayName": "ankit@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "jigar@digiqc.com",
+        "email": "jigar@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "anu203ueq4d92l7dak78iodsmb_R20260414T053000@google.com|2026-04-28T05:30:00.000Z",
+      "summary": "digiQC Daily Morning Update Call",
+      "start": {
+        "dateTime": "2026-04-28T05:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-28T05:45:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/jcm-pjkp-gkj\nOr dial: (US) +1 503-917-5822 PIN: 665953473#\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/jcm-pjkp-gkj",
+      "meetLink": {
+        "url": "https://meet.google.com/jcm-pjkp-gkj",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jainik@digiqc.com",
+          "displayName": "jainik@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "varun@digiqc.com",
+          "displayName": "varun@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "mayank@digiqc.com",
+          "displayName": "mayank@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jay@digiqc.com",
+          "displayName": "jay@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "ankit@digiqc.com",
+          "displayName": "ankit@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "jigar@digiqc.com",
+        "email": "jigar@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "40t9kqtraheoor47qut07a9dk6@google.com|2026-04-28T05:30:00.000Z",
+      "summary": "Meeting B Ravi at Adarsh office",
+      "start": {
+        "dateTime": "2026-04-28T05:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-28T07:30:00.000Z"
+      },
+      "location": "2/4.3rd Floor, Langford Garden,Richmond Town, Benguluru, India 560025",
+      "description": "",
+      "hangoutLink": null,
+      "meetLink": null,
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "mokshika@digiqc.com",
+          "displayName": "mokshika@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "mokshika@digiqc.com",
+        "email": "mokshika@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "6lj3eo9i68qjabb160r62b9k68sm6bb1clj38b9j6cq64p1p6kp66cj2cc_R20260401T043000@google.com|2026-04-29T04:30:00.000Z",
+      "summary": "Customer Onboarding & Implementation",
+      "start": {
+        "dateTime": "2026-04-29T04:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-29T05:00:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/uej-znxf-cpg\nOr dial: (US) +1 513-813-1570 PIN: 305029383#\nMore phone numbers: https://tel.meet/uej-znxf-cpg?pin=5765675914377&hs=7\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/uej-znxf-cpg",
+      "meetLink": {
+        "url": "https://meet.google.com/uej-znxf-cpg",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "sohini@digiqc.com",
+          "displayName": "sohini@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "sumant@digiqc.com",
+          "displayName": "sumant@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jyoti@digiqc.com",
+          "displayName": "jyoti@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "support@digiqc.com",
+          "displayName": "support@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "mokshika@digiqc.com",
+          "displayName": "mokshika@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "sumant@digiqc.com",
+        "email": "sumant@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "anu203ueq4d92l7dak78iodsmb_R20260414T053000@google.com|2026-04-29T05:30:00.000Z",
+      "summary": "digiQC Daily Morning Update Call",
+      "start": {
+        "dateTime": "2026-04-29T05:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-29T05:45:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/jcm-pjkp-gkj\nOr dial: (US) +1 503-917-5822 PIN: 665953473#\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/jcm-pjkp-gkj",
+      "meetLink": {
+        "url": "https://meet.google.com/jcm-pjkp-gkj",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jainik@digiqc.com",
+          "displayName": "jainik@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "varun@digiqc.com",
+          "displayName": "varun@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "mayank@digiqc.com",
+          "displayName": "mayank@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jay@digiqc.com",
+          "displayName": "jay@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "ankit@digiqc.com",
+          "displayName": "ankit@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "jigar@digiqc.com",
+        "email": "jigar@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "96m3uqlsf5mne6afgl0nq78nne_R20260408T083000@google.com|2026-04-29T08:30:00.000Z",
+      "summary": "digiQC tech standup call (Wednesday)",
+      "start": {
+        "dateTime": "2026-04-29T08:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-29T09:00:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/aiw-yrap-giu\nOr dial: (US) +1 636-452-0157 PIN: 276072540#\nMore phone numbers: https://tel.meet/aiw-yrap-giu?pin=5908537562438&hs=7\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/aiw-yrap-giu",
+      "meetLink": {
+        "url": "https://meet.google.com/aiw-yrap-giu",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "nachiket@digiqc.com",
+          "displayName": "nachiket@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jainik@digiqc.com",
+          "displayName": "jainik@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "varun@digiqc.com",
+          "displayName": "varun@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "mayank@digiqc.com",
+          "displayName": "mayank@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "patel.nachiket.r@gmail.com",
+          "displayName": "patel.nachiket.r@gmail.com",
+          "resource": false
+        },
+        {
+          "email": "jay@digiqc.com",
+          "displayName": "jay@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "ankit@digiqc.com",
+          "displayName": "ankit@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "jigar@digiqc.com",
+        "email": "jigar@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "anu203ueq4d92l7dak78iodsmb_R20260414T053000@google.com|2026-04-30T05:30:00.000Z",
+      "summary": "digiQC Daily Morning Update Call",
+      "start": {
+        "dateTime": "2026-04-30T05:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-30T05:45:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/jcm-pjkp-gkj\nOr dial: (US) +1 503-917-5822 PIN: 665953473#\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/jcm-pjkp-gkj",
+      "meetLink": {
+        "url": "https://meet.google.com/jcm-pjkp-gkj",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jainik@digiqc.com",
+          "displayName": "jainik@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "varun@digiqc.com",
+          "displayName": "varun@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "mayank@digiqc.com",
+          "displayName": "mayank@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jay@digiqc.com",
+          "displayName": "jay@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "ankit@digiqc.com",
+          "displayName": "ankit@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "jigar@digiqc.com",
+        "email": "jigar@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "phr14u3ncaqh0na3384vr56s3k@google.com|2026-04-30T07:25:00.000Z",
+      "summary": "Flight to STV (6E 465)",
+      "start": {
+        "dateTime": "2026-04-30T07:25:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-30T09:20:00.000Z"
+      },
+      "location": "",
+      "description": "To see detailed information for automatically created events like this one, use the official Google Calendar app. https://g.co/calendar\n\nThis event was created from an email you received in Gmail. https://mail.google.com/mail?extsrc=cal&plid=ACUX6DMm8ZUCAUUPMGN3ygzMhPpeqAlc0sMmSQ8",
+      "hangoutLink": null,
+      "meetLink": null,
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": null,
+      "status": "confirmed"
+    },
+    {
+      "id": "anu203ueq4d92l7dak78iodsmb_R20260414T053000@google.com|2026-05-01T05:30:00.000Z",
+      "summary": "digiQC Daily Morning Update Call",
+      "start": {
+        "dateTime": "2026-05-01T05:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-05-01T05:45:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/jcm-pjkp-gkj\nOr dial: (US) +1 503-917-5822 PIN: 665953473#\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/jcm-pjkp-gkj",
+      "meetLink": {
+        "url": "https://meet.google.com/jcm-pjkp-gkj",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jainik@digiqc.com",
+          "displayName": "jainik@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "varun@digiqc.com",
+          "displayName": "varun@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "mayank@digiqc.com",
+          "displayName": "mayank@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jay@digiqc.com",
+          "displayName": "jay@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "ankit@digiqc.com",
+          "displayName": "ankit@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "jigar@digiqc.com",
+        "email": "jigar@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "6duprdj17peejfnq59cdfvdquq_R20260417T083000@google.com|2026-05-01T08:30:00.000Z",
+      "summary": "digiQC Tech standup call",
+      "start": {
+        "dateTime": "2026-05-01T08:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-05-01T09:00:00.000Z"
+      },
+      "location": "",
+      "description": "Join with Google Meet: https://meet.google.com/jaw-jgud-npa\nOr dial: (US) +1 470-241-4947 PIN: 272294868#\nMore phone numbers: https://tel.meet/jaw-jgud-npa?pin=6703238680332&hs=7\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720",
+      "hangoutLink": "https://meet.google.com/jaw-jgud-npa",
+      "meetLink": {
+        "url": "https://meet.google.com/jaw-jgud-npa",
+        "type": "meet",
+        "label": "Meet"
+      },
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "nachiket@digiqc.com",
+          "displayName": "nachiket@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jainik@digiqc.com",
+          "displayName": "jainik@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "varun@digiqc.com",
+          "displayName": "varun@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "sweety@digiqc.com",
+          "displayName": "mayank@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "patel.nachiket.r@gmail.com",
+          "displayName": "patel.nachiket.r@gmail.com",
+          "resource": false
+        },
+        {
+          "email": "jay@digiqc.com",
+          "displayName": "jay@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "ankit@digiqc.com",
+          "displayName": "ankit@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "jigar@digiqc.com",
+        "email": "jigar@digiqc.com"
+      },
+      "status": "confirmed"
+    }
+  ]
+}
