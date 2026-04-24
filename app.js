@@ -980,19 +980,25 @@ async function doCloseTask() {
   btn.disabled = true;
 
   const card = document.querySelector(`.task[data-task-id="${task.id}"]`);
-  if (card) card.classList.add('closing');
-
   const rect = card ? card.getBoundingClientRect() : null;
   const cx = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
   const cy = rect ? rect.top + rect.height / 2 : window.innerHeight / 2;
   const xpReward = task.assignee ? 0 : computeCloseXP({ ...task, closedAt: new Date().toISOString() });
 
   $('#closeModal').classList.add('hidden');
-  if (xpReward > 0) floatXPAt(`+${xpReward} XP`, cx, cy);
-  else floatXPAt(`✓ Done`, cx, cy);
-  burstConfetti(cx / window.innerWidth, cy / window.innerHeight);
-  setTimeout(() => burstConfetti(Math.random(), Math.random() * 0.3), 150);
-  playSound('complete');
+
+  if (task.assignee) {
+    // Delegated — tracking only. Skip the .closing fade (600ms CSS anim), the
+    // confetti burst, and the ✓ Done float. The card should just vanish when
+    // renderAll() rebuilds the list below.
+    playSound('add');
+  } else {
+    if (card) card.classList.add('closing');
+    floatXPAt(`+${xpReward} XP`, cx, cy);
+    burstConfetti(cx / window.innerWidth, cy / window.innerHeight);
+    setTimeout(() => burstConfetti(Math.random(), Math.random() * 0.3), 150);
+    playSound('complete');
+  }
 
   // Optimistic update: flip local state + re-render immediately so the card
   // leaves the Mine/Delegated list right away. The GitHub API round-trip
@@ -1069,10 +1075,12 @@ async function doReopenTask() {
   }
   playSound('add');
 
-  // Find the card and fly it toward the tab it's landing in (Mine or Delegated)
+  // Find the card and fly it toward the tab it's landing in (Mine only).
+  // Delegated reopens skip the fly animation — it's tracking-only, a big
+  // celebration flourish for "unmark" feels wrong and adds visible lag.
   const targetTabName = task.assignee ? 'delegated' : 'mine';
   const sourceCard = document.querySelector(`.task[data-task-id="${task.id}"]`);
-  const flight = sourceCard ? flyCardToTab(sourceCard, targetTabName) : Promise.resolve();
+  const flight = (sourceCard && !task.assignee) ? flyCardToTab(sourceCard, targetTabName) : Promise.resolve();
 
   // Optimistic: flip state locally so the Done tab empties right away.
   // Flight animation runs in parallel with the API call.
