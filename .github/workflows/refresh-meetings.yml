@@ -36,20 +36,22 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Only commit the events array — ignore generatedAt timestamp churn so
-          # we don't spam the git history every 15 min when nothing changed.
-          if [ -f meetings.json.prev ]; then rm meetings.json.prev; fi
-          if git diff --quiet -- meetings.json; then
+          # Stage first so we can compare against HEAD; `git diff` without
+          # --cached ignores untracked files, which bit us the first run.
+          git add meetings.json
+          if git diff --cached --quiet -- meetings.json; then
             echo "No changes to meetings.json"
             exit 0
           fi
-          # If only generatedAt changed, skip commit
-          CHANGED_LINES=$(git diff -U0 -- meetings.json | grep -E '^[+-]' | grep -v -E '^[+-]{3}' | grep -v -E '"generatedAt"' || true)
+          # If only generatedAt changed in an already-tracked file, skip the commit
+          # to keep git history clean. (On the very first run the file is new,
+          # so this filter correctly returns non-empty and we commit.)
+          CHANGED_LINES=$(git diff --cached -U0 -- meetings.json | grep -E '^[+-]' | grep -v -E '^[+-]{3}' | grep -v -E '"generatedAt"' || true)
           if [ -z "$CHANGED_LINES" ]; then
             echo "Only generatedAt changed — skipping commit"
+            git reset HEAD -- meetings.json
             git checkout -- meetings.json
             exit 0
           fi
-          git add meetings.json
           git commit -m "chore: refresh meetings.json [skip ci]"
           git push
