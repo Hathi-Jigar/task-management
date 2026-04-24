@@ -1436,6 +1436,164 @@ function convertNoteToQuest(meeting, note, mode) {
   }, 120);
 }
 
+/* ========== GLOBAL SEARCH ==========
+ * Searches across S.tasks (title, notes, assignee, tags) and S.meetings
+ * (title, note text). Results are grouped by tab so the user knows where
+ * each match lives; clicking a result switches to that tab, scrolls the
+ * item into view, and pulses a highlight on it.
+ */
+
+function openSearch() {
+  $('#searchModal').classList.remove('hidden');
+  $('#searchInput').value = '';
+  renderSearchResults('');
+  setTimeout(() => $('#searchInput').focus(), 50);
+}
+
+function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+function highlightMatch(text, query) {
+  if (!query) return escapeHTML(text);
+  const safe = escapeHTML(text);
+  const pattern = new RegExp(`(${escapeRegex(query)})`, 'ig');
+  return safe.replace(pattern, '<mark class="search-hl">$1</mark>');
+}
+
+function matchTask(task, q) {
+  const hay = [
+    task.title || '',
+    task.assignee || '',
+    (task.tags || []).join(' '),
+    notesTextOnly(task.notes) || ''
+  ].join(' ').toLowerCase();
+  return hay.includes(q);
+}
+
+function matchMeeting(m, q) {
+  if ((m.title || '').toLowerCase().includes(q)) return { kind: 'meeting', noteHit: null };
+  const noteHit = m.notes.find(n => (n.text || '').toLowerCase().includes(q));
+  return noteHit ? { kind: 'note', noteHit } : null;
+}
+
+function renderSearchResults(rawQuery) {
+  const query = (rawQuery || '').trim().toLowerCase();
+  const resultsEl = $('#searchResults');
+  const hintEl = $('#searchHint');
+  if (!query) {
+    resultsEl.innerHTML = '';
+    resultsEl.classList.add('hidden');
+    hintEl.classList.remove('hidden');
+    return;
+  }
+  hintEl.classList.add('hidden');
+  resultsEl.classList.remove('hidden');
+
+  // Active = open; closed = done. We classify by state + assignee.
+  const matchingTasks = S.tasks.filter(t => matchTask(t, query));
+  const mine = matchingTasks.filter(t => t.state === 'open' && !t.assignee);
+  const delegated = matchingTasks.filter(t => t.state === 'open' && t.assignee);
+  const done = matchingTasks.filter(t => t.state === 'closed');
+
+  const meetingHits = [];
+  for (const m of S.meetings) {
+    // Match title or any note's text; collect all matching notes in the meeting
+    const titleHit = (m.title || '').toLowerCase().includes(query);
+    const matchingNotes = m.notes.filter(n => (n.text || '').toLowerCase().includes(query));
+    if (titleHit || matchingNotes.length) {
+      meetingHits.push({ meeting: m, titleHit, matchingNotes });
+    }
+  }
+
+  const total = mine.length + delegated.length + done.length + meetingHits.length;
+  if (!total) {
+    resultsEl.innerHTML = `<div class="search-noresults">No matches for "${escapeHTML(rawQuery)}"</div>`;
+    return;
+  }
+
+  resultsEl.innerHTML = '';
+
+  const addGroup = (label, icon, items, render) => {
+    if (!items.length) return;
+    const group = el('div', 'search-group');
+    group.innerHTML = `<div class="search-group-header">${icon} ${label} <span class="search-group-count">${items.length}</span></div>`;
+    const listEl = el('div', 'search-group-list');
+    items.forEach(x => listEl.appendChild(render(x)));
+    group.appendChild(listEl);
+    resultsEl.appendChild(group);
+  };
+
+  const renderTaskResult = (task, targetTab) => {
+    const row = el('div', 'search-result');
+    const dl = task.deadline
+      ? new Date(task.deadline).toLocaleDateString([], { day: 'numeric', month: 'short' })
+      : '';
+    const metaBits = [];
+    if (dl) metaBits.push(`📅 ${dl}`);
+    if (task.assignee) metaBits.push(`👤 ${escapeHTML(task.assignee)}`);
+    if (task.tags && task.tags.length) metaBits.push(task.tags.map(t => `#${escapeHTML(t)}`).join(' '));
+    row.innerHTML = `
+      <div class="search-result-title">${highlightMatch(task.title, query)}</div>
+      <div class="search-result-meta">${metaBits.join(' · ')}</div>
+    `;
+    row.addEventListener('click', () => jumpToTask(task, targetTab));
+    return row;
+  };
+
+  addGroup('Mine', '⚔️', mine, t => renderTaskResult(t, 'mine'));
+  addGroup('Delegated', '👥', delegated, t => renderTaskResult(t, 'delegated'));
+
+  addGroup('Meetings', '📝', meetingHits, ({ meeting, titleHit, matchingNotes }) => {
+    const row = el('div', 'search-result');
+    const metaBits = [`📅 ${escapeHTML(fmtMeetingDate(meeting.date))}`, `${meeting.notes.length} notes`];
+    if (meeting.state === 'closed') metaBits.push('🗄️ archived');
+    const noteSnippets = matchingNotes.slice(0, 3).map(n =>
+      `<div class="search-result-note">${n.num}. ${highlightMatch(n.text.slice(0, 120), query)}</div>`
+    ).join('');
+    const moreNotes = matchingNotes.length > 3 ? `<div class="search-result-note search-more">+${matchingNotes.length - 3} more</div>` : '';
+    row.innerHTML = `
+      <div class="search-result-title">${titleHit ? highlightMatch(meeting.title, query) : escapeHTML(meeting.title)}</div>
+      <div class="search-result-meta">${metaBits.join(' · ')}</div>
+      ${noteSnippets}${moreNotes}
+    `;
+    row.addEventListener('click', () => jumpToMeeting(meeting));
+    return row;
+  });
+
+  addGroup('Done', '✅', done, t => renderTaskResult(t, 'done'));
+}
+
+function jumpToTask(task, targetTab) {
+  closeModals();
+  switchTab(targetTab);
+  // Defer until the tab swap has re-rendered
+  requestAnimationFrame(() => {
+    const card = document.querySelector(`.task[data-task-id="${task.id}"]`);
+    if (!card) return;
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.classList.add('search-highlight');
+    setTimeout(() => card.classList.remove('search-highlight'), 1800);
+  });
+}
+
+function jumpToMeeting(meeting) {
+  closeModals();
+  switchTab('meetings');
+  // Ensure the archived toggle is on if needed, then expand + scroll
+  if (meeting.state === 'closed' && !S.showArchivedMeetings) {
+    S.showArchivedMeetings = true;
+    const chk = $('#meetingsShowArchived'); if (chk) chk.checked = true;
+  }
+  S.expandedMeetingIds_app.add(meeting.id);
+  renderMeetingsTab();
+  requestAnimationFrame(() => {
+    const card = document.querySelector(`.meeting-card-item[data-meeting-id="${meeting.id}"]`);
+    if (!card) return;
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.classList.add('search-highlight');
+    setTimeout(() => card.classList.remove('search-highlight'), 1800);
+  });
+}
+
 /* ========== CLOSE / REOPEN / DELETE ========== */
 function askCloseConfirm(task) {
   S.pendingCloseTask = task;
@@ -2035,6 +2193,18 @@ function wireEvents() {
   $('#delegatedAddBtn')?.addEventListener('click', () => openTaskModal(null, { mode: 'delegated' }));
   $('#meetingAddBtn')?.addEventListener('click', () => openMeetingModal());
   $('#meetingForm')?.addEventListener('submit', handleMeetingSubmit);
+  $('#searchHeroBtn')?.addEventListener('click', openSearch);
+  $('#searchInput')?.addEventListener('input', (e) => renderSearchResults(e.target.value));
+  $('#searchInput')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); closeModals(); }
+  });
+  // Global ⌘K / Ctrl+K to open search from anywhere
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      openSearch();
+    }
+  });
   $('#meetingsShowArchived')?.addEventListener('change', (ev) => {
     S.showArchivedMeetings = ev.target.checked;
     renderMeetingsTab();

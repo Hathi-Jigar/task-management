@@ -65,6 +65,7 @@
           <div class="bar-label" id="hpLabel">❤️ 100 / 100 HP</div>
         </div>
       </div>
+      <button class="icon-btn" id="searchHeroBtn" title="Search (⌘K / Ctrl+K)" aria-label="Search">🔍</button>
       <button class="icon-btn refresh-btn-hero" id="refreshHeroBtn" title="Sync now" aria-label="Sync now">🔄</button>
       <button class="icon-btn" id="menuBtn" title="Menu" aria-label="Menu">⚙️</button>
     </div>
@@ -260,6 +261,22 @@
         </button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- ================= SEARCH MODAL (global) ================= -->
+<div id="searchModal" class="modal hidden">
+  <div class="modal-card search-card">
+    <div class="search-header">
+      <span class="search-icon">🔍</span>
+      <input id="searchInput" type="search" placeholder="Search quests, meetings, notes, assignees, tags…" autocomplete="off" />
+      <button class="icon-btn" data-close-modal title="Close">✕</button>
+    </div>
+    <div id="searchResults" class="search-results"></div>
+    <div id="searchHint" class="search-hint">
+      <div>Type to search across all tabs.</div>
+      <div class="search-hint-small">Matches: titles, notes, assignees, tags, meeting titles, meeting notes.</div>
+    </div>
   </div>
 </div>
 
