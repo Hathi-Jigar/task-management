@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-24T10:50:43.070Z",
+  "generatedAt": "2026-04-24T11:56:16.228Z",
   "window": {
     "start": "2026-04-16T18:30:00.000Z",
     "end": "2026-05-01T18:30:00.000Z"
@@ -849,38 +849,6 @@
       "status": "confirmed"
     },
     {
-      "id": "40t9kqtraheoor47qut07a9dk6@google.com|2026-04-28T05:30:00.000Z",
-      "summary": "Meeting B Ravi at Adarsh office",
-      "start": {
-        "dateTime": "2026-04-28T05:30:00.000Z"
-      },
-      "end": {
-        "dateTime": "2026-04-28T06:30:00.000Z"
-      },
-      "location": "2/4.3rd Floor, Langford Garden,Richmond Town, Benguluru, India 560025",
-      "description": "",
-      "hangoutLink": null,
-      "meetLink": null,
-      "htmlLink": null,
-      "attendees": [
-        {
-          "email": "mokshika@digiqc.com",
-          "displayName": "mokshika@digiqc.com",
-          "resource": false
-        },
-        {
-          "email": "jigar@digiqc.com",
-          "displayName": "jigar@digiqc.com",
-          "resource": false
-        }
-      ],
-      "organizer": {
-        "displayName": "mokshika@digiqc.com",
-        "email": "mokshika@digiqc.com"
-      },
-      "status": "confirmed"
-    },
-    {
       "id": "anu203ueq4d92l7dak78iodsmb_R20260414T053000@google.com|2026-04-28T05:30:00.000Z",
       "summary": "digiQC Daily Morning Update Call",
       "start": {
@@ -933,6 +901,38 @@
       "organizer": {
         "displayName": "jigar@digiqc.com",
         "email": "jigar@digiqc.com"
+      },
+      "status": "confirmed"
+    },
+    {
+      "id": "40t9kqtraheoor47qut07a9dk6@google.com|2026-04-28T05:30:00.000Z",
+      "summary": "Meeting B Ravi at Adarsh office",
+      "start": {
+        "dateTime": "2026-04-28T05:30:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-04-28T06:30:00.000Z"
+      },
+      "location": "2/4.3rd Floor, Langford Garden,Richmond Town, Benguluru, India 560025",
+      "description": "",
+      "hangoutLink": null,
+      "meetLink": null,
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "mokshika@digiqc.com",
+          "displayName": "mokshika@digiqc.com",
+          "resource": false
+        },
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": {
+        "displayName": "mokshika@digiqc.com",
+        "email": "mokshika@digiqc.com"
       },
       "status": "confirmed"
     },
