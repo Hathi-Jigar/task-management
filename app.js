@@ -994,28 +994,47 @@ async function doCloseTask() {
   setTimeout(() => burstConfetti(Math.random(), Math.random() * 0.3), 150);
   playSound('complete');
 
+  // Optimistic update: flip local state + re-render immediately so the card
+  // leaves the Mine/Delegated list right away. The GitHub API round-trip
+  // (~500ms) happens in the background; on failure we revert and toast.
+  const idx = S.tasks.findIndex(t => t.id === task.id);
+  const prevSnapshot = idx >= 0 ? S.tasks[idx] : null;
+  const nowIso = new Date().toISOString();
+  if (idx >= 0) {
+    S.tasks[idx] = { ...prevSnapshot, state: 'closed', closedAt: nowIso };
+  }
+  const oldStats = S.stats;
+  S.stats = computeStats(S.tasks);
+  renderAll();
+  if (oldStats && S.stats.level > oldStats.level) showLevelUp(S.stats.level);
+  if (oldStats) {
+    for (const id of S.stats.badges) {
+      if (!oldStats.badges.has(id)) {
+        const b = BADGES.find(bb => bb.id === id);
+        if (b) showBadge(b);
+      }
+    }
+  }
+
   try {
     const closed = await closeTaskApi(task.id);
-    const idx = S.tasks.findIndex(t => t.id === task.id);
-    if (idx >= 0 && closed) S.tasks[idx] = parseTask(closed);
+    const realIdx = S.tasks.findIndex(t => t.id === task.id);
+    if (realIdx >= 0 && closed) S.tasks[realIdx] = parseTask(closed);
     if (task.recurring && task.recurring !== 'none') {
       const created = await handleRecurring(task);
       if (created) S.tasks.unshift(parseTask(created));
     }
-    const oldStats = S.stats;
     S.stats = computeStats(S.tasks);
-    if (oldStats && S.stats.level > oldStats.level) showLevelUp(S.stats.level);
-    if (oldStats) {
-      for (const id of S.stats.badges) {
-        if (!oldStats.badges.has(id)) {
-          const b = BADGES.find(bb => bb.id === id);
-          if (b) showBadge(b);
-        }
-      }
-    }
-    setTimeout(() => renderAll(), 400);
+    renderAll();
     refresh().catch(() => {});
   } catch (e) {
+    // Roll back optimistic change
+    if (prevSnapshot) {
+      const rIdx = S.tasks.findIndex(t => t.id === task.id);
+      if (rIdx >= 0) S.tasks[rIdx] = prevSnapshot;
+    }
+    S.stats = computeStats(S.tasks);
+    renderAll();
     if (card) card.classList.remove('closing');
     toast('Could not close: ' + e.message, 'error');
   } finally {
@@ -1055,19 +1074,30 @@ async function doReopenTask() {
   const sourceCard = document.querySelector(`.task[data-task-id="${task.id}"]`);
   const flight = sourceCard ? flyCardToTab(sourceCard, targetTabName) : Promise.resolve();
 
+  // Optimistic: flip state locally so the Done tab empties right away.
+  // Flight animation runs in parallel with the API call.
+  const idx = S.tasks.findIndex(t => t.id === task.id);
+  const prevSnapshot = idx >= 0 ? S.tasks[idx] : null;
+  if (idx >= 0) S.tasks[idx] = { ...prevSnapshot, state: 'open', closedAt: null };
+  S.stats = computeStats(S.tasks);
+  pulseTab(targetTabName);
+
   try {
-    const reopened = await reopenTaskApi(task.id);
-    const idx = S.tasks.findIndex(t => t.id === task.id);
-    if (idx >= 0 && reopened) S.tasks[idx] = parseTask(reopened);
+    const [reopened] = await Promise.all([reopenTaskApi(task.id), flight]);
+    const realIdx = S.tasks.findIndex(t => t.id === task.id);
+    if (realIdx >= 0 && reopened) S.tasks[realIdx] = parseTask(reopened);
     S.stats = computeStats(S.tasks);
-
-    pulseTab(targetTabName);
-
-    await flight;
     renderAll();
     toast(`↩️ Quest reopened → ${targetTabName === 'delegated' ? 'Delegated' : 'Mine'} tab  •  ${task.assignee ? '' : `−${xpLoss} XP`}`, 'error');
     refresh().catch(() => {});
   } catch (e) {
+    // Roll back
+    if (prevSnapshot) {
+      const rIdx = S.tasks.findIndex(t => t.id === task.id);
+      if (rIdx >= 0) S.tasks[rIdx] = prevSnapshot;
+    }
+    S.stats = computeStats(S.tasks);
+    renderAll();
     toast('Could not reopen: ' + e.message, 'error');
   } finally {
     btn.disabled = false;
