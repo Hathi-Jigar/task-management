@@ -1655,47 +1655,38 @@ function askCloseConfirm(task) {
   playSound('add');
 }
 
-async function doCloseTask() {
+function doCloseTask() {
   const task = S.pendingCloseTask;
   if (!task) return;
   S.pendingCloseTask = null;
 
-  const btn = $('#confirmCloseBtn');
-  btn.disabled = true;
-
-  const card = document.querySelector(`.task[data-task-id="${task.id}"]`);
-  const rect = card ? card.getBoundingClientRect() : null;
-  const cx = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
-  const cy = rect ? rect.top + rect.height / 2 : window.innerHeight / 2;
-  const xpReward = task.assignee ? 0 : computeCloseXP({ ...task, closedAt: new Date().toISOString() });
-
+  // --- PHASE 1: MOVE. Everything visible to the user happens here,
+  // synchronously, in one microtask. Modal hides, state flips, list rerenders.
+  // No awaits, no animations that delay the node removal, no second confetti
+  // burst. The card is gone before the browser paints the next frame.
   $('#closeModal').classList.add('hidden');
+  const $btn = $('#confirmCloseBtn'); if ($btn) $btn.disabled = false;
 
-  if (task.assignee) {
-    // Delegated — tracking only. Skip the .closing fade (600ms CSS anim), the
-    // confetti burst, and the ✓ Done float. The card should just vanish when
-    // renderAll() rebuilds the list below.
-    playSound('add');
-  } else {
-    if (card) card.classList.add('closing');
-    floatXPAt(`+${xpReward} XP`, cx, cy);
-    burstConfetti(cx / window.innerWidth, cy / window.innerHeight);
-    setTimeout(() => burstConfetti(Math.random(), Math.random() * 0.3), 150);
-    playSound('complete');
-  }
-
-  // Optimistic update: flip local state + re-render immediately so the card
-  // leaves the Mine/Delegated list right away. The GitHub API round-trip
-  // (~500ms) happens in the background; on failure we revert and toast.
   const idx = S.tasks.findIndex(t => t.id === task.id);
   const prevSnapshot = idx >= 0 ? S.tasks[idx] : null;
   const nowIso = new Date().toISOString();
-  if (idx >= 0) {
-    S.tasks[idx] = { ...prevSnapshot, state: 'closed', closedAt: nowIso };
-  }
+  if (idx >= 0) S.tasks[idx] = { ...prevSnapshot, state: 'closed', closedAt: nowIso };
   const oldStats = S.stats;
   S.stats = computeStats(S.tasks);
   renderAll();
+
+  // --- PHASE 2: CELEBRATE. After the move, fire non-blocking visual feedback.
+  // Use viewport-relative coords since the source card is already gone.
+  if (!task.assignee) {
+    const xpReward = computeCloseXP({ ...task, closedAt: nowIso });
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight * 0.4;
+    floatXPAt(`+${xpReward} XP`, cx, cy);
+    burstConfetti(0.5, 0.4);
+    playSound('complete');
+  } else {
+    playSound('add');
+  }
   if (oldStats && S.stats.level > oldStats.level) showLevelUp(S.stats.level);
   if (oldStats) {
     for (const id of S.stats.badges) {
@@ -1706,30 +1697,37 @@ async function doCloseTask() {
     }
   }
 
-  try {
-    const closed = await closeTaskApi(task.id);
-    const realIdx = S.tasks.findIndex(t => t.id === task.id);
-    if (realIdx >= 0 && closed) S.tasks[realIdx] = parseTask(closed);
-    if (task.recurring && task.recurring !== 'none') {
-      const created = await handleRecurring(task);
-      if (created) S.tasks.unshift(parseTask(created));
-    }
-    S.stats = computeStats(S.tasks);
-    renderAll();
-    refresh().catch(() => {});
-  } catch (e) {
-    // Roll back optimistic change
-    if (prevSnapshot) {
+  // --- PHASE 3: PERSIST. Fire GitHub API + recurring creation in the
+  // background. Rollback on failure. Only re-render if a *new* task (next
+  // recurring instance) was created — otherwise the optimistic render is
+  // already correct and a second renderAll would cause a pointless flicker.
+  closeTaskApi(task.id)
+    .then(async (closed) => {
       const rIdx = S.tasks.findIndex(t => t.id === task.id);
-      if (rIdx >= 0) S.tasks[rIdx] = prevSnapshot;
-    }
-    S.stats = computeStats(S.tasks);
-    renderAll();
-    if (card) card.classList.remove('closing');
-    toast('Could not close: ' + e.message, 'error');
-  } finally {
-    btn.disabled = false;
-  }
+      if (rIdx >= 0 && closed) S.tasks[rIdx] = parseTask(closed);
+      if (task.recurring && task.recurring !== 'none') {
+        try {
+          const created = await handleRecurring(task);
+          if (created) {
+            S.tasks.unshift(parseTask(created));
+            S.stats = computeStats(S.tasks);
+            renderAll();
+          }
+        } catch (e) {
+          toast('Recurring follow-up failed: ' + e.message, 'error');
+        }
+      }
+      refresh().catch(() => {});
+    })
+    .catch((e) => {
+      if (prevSnapshot) {
+        const rIdx = S.tasks.findIndex(t => t.id === task.id);
+        if (rIdx >= 0) S.tasks[rIdx] = prevSnapshot;
+      }
+      S.stats = computeStats(S.tasks);
+      renderAll();
+      toast('Could not close: ' + e.message, 'error');
+    });
 }
 
 function askReopenConfirm(task) {
@@ -1740,14 +1738,23 @@ function askReopenConfirm(task) {
   $('#reopenModal').classList.remove('hidden');
 }
 
-async function doReopenTask() {
+function doReopenTask() {
   const task = S.pendingReopenTask;
   if (!task) return;
   S.pendingReopenTask = null;
-  const btn = $('#confirmReopenBtn');
-  btn.disabled = true;
-  $('#reopenModal').classList.add('hidden');
 
+  // PHASE 1: MOVE — synchronous. Modal hides, state flips, list rerenders.
+  $('#reopenModal').classList.add('hidden');
+  const $btn = $('#confirmReopenBtn'); if ($btn) $btn.disabled = false;
+
+  const targetTabName = task.assignee ? 'delegated' : 'mine';
+  const idx = S.tasks.findIndex(t => t.id === task.id);
+  const prevSnapshot = idx >= 0 ? S.tasks[idx] : null;
+  if (idx >= 0) S.tasks[idx] = { ...prevSnapshot, state: 'open', closedAt: null };
+  S.stats = computeStats(S.tasks);
+  renderAll();
+
+  // PHASE 2: CELEBRATE / PENALIZE
   const xpLoss = task.assignee ? 0 : computeCloseXP(task);
   if (xpLoss > 0) {
     floatLossAt(`−${xpLoss} XP`, window.innerWidth / 2, window.innerHeight * 0.4);
@@ -1757,43 +1764,27 @@ async function doReopenTask() {
       setTimeout(() => hpBar.classList.remove('hp-hit'), 600);
     }
   }
-  playSound('add');
-
-  // Find the card and fly it toward the tab it's landing in (Mine only).
-  // Delegated reopens skip the fly animation — it's tracking-only, a big
-  // celebration flourish for "unmark" feels wrong and adds visible lag.
-  const targetTabName = task.assignee ? 'delegated' : 'mine';
-  const sourceCard = document.querySelector(`.task[data-task-id="${task.id}"]`);
-  const flight = (sourceCard && !task.assignee) ? flyCardToTab(sourceCard, targetTabName) : Promise.resolve();
-
-  // Optimistic: flip state locally so the Done tab empties right away.
-  // Flight animation runs in parallel with the API call.
-  const idx = S.tasks.findIndex(t => t.id === task.id);
-  const prevSnapshot = idx >= 0 ? S.tasks[idx] : null;
-  if (idx >= 0) S.tasks[idx] = { ...prevSnapshot, state: 'open', closedAt: null };
-  S.stats = computeStats(S.tasks);
   pulseTab(targetTabName);
+  playSound('add');
+  toast(`↩️ Quest reopened → ${targetTabName === 'delegated' ? 'Delegated' : 'Mine'} tab${xpLoss > 0 ? `  •  −${xpLoss} XP` : ''}`, 'error');
 
-  try {
-    const [reopened] = await Promise.all([reopenTaskApi(task.id), flight]);
-    const realIdx = S.tasks.findIndex(t => t.id === task.id);
-    if (realIdx >= 0 && reopened) S.tasks[realIdx] = parseTask(reopened);
-    S.stats = computeStats(S.tasks);
-    renderAll();
-    toast(`↩️ Quest reopened → ${targetTabName === 'delegated' ? 'Delegated' : 'Mine'} tab  •  ${task.assignee ? '' : `−${xpLoss} XP`}`, 'error');
-    refresh().catch(() => {});
-  } catch (e) {
-    // Roll back
-    if (prevSnapshot) {
+  // PHASE 3: PERSIST. Background API with rollback on failure.
+  reopenTaskApi(task.id)
+    .then((reopened) => {
       const rIdx = S.tasks.findIndex(t => t.id === task.id);
-      if (rIdx >= 0) S.tasks[rIdx] = prevSnapshot;
-    }
-    S.stats = computeStats(S.tasks);
-    renderAll();
-    toast('Could not reopen: ' + e.message, 'error');
-  } finally {
-    btn.disabled = false;
-  }
+      if (rIdx >= 0 && reopened) S.tasks[rIdx] = parseTask(reopened);
+      // No renderAll — no visible change would result.
+      refresh().catch(() => {});
+    })
+    .catch((e) => {
+      if (prevSnapshot) {
+        const rIdx = S.tasks.findIndex(t => t.id === task.id);
+        if (rIdx >= 0) S.tasks[rIdx] = prevSnapshot;
+      }
+      S.stats = computeStats(S.tasks);
+      renderAll();
+      toast('Could not reopen: ' + e.message, 'error');
+    });
 }
 
 function flyCardToTab(card, tabName) {
