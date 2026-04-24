@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-24T07:18:17.803Z",
+  "generatedAt": "2026-04-24T09:16:54.392Z",
   "window": {
     "start": "2026-04-16T18:30:00.000Z",
     "end": "2026-05-01T18:30:00.000Z"
@@ -725,6 +725,30 @@
       "status": "confirmed"
     },
     {
+      "id": "aqll0mjcglkfc1h6cmae4aej4o@google.com|2026-04-27T00:00:00.000Z",
+      "summary": "Stay at ICON BUSINESS BY BHAGINI",
+      "start": {
+        "dateTime": "2026-04-27T00:00:00.000Z"
+      },
+      "end": {
+        "dateTime": "2026-05-01T00:00:00.000Z"
+      },
+      "location": "ICON BUSINESS BY BHAGINI, Bengaluru",
+      "description": "To see detailed information for automatically created events like this one, use the official Google Calendar app. https://g.co/calendar\n\nThis event was created from an email you received in Gmail. https://mail.google.com/mail?extsrc=cal&plid=ACUX6DMgzMSbUI0y3ECSccoC0VctkXhs32mQEQ0",
+      "hangoutLink": null,
+      "meetLink": null,
+      "htmlLink": null,
+      "attendees": [
+        {
+          "email": "jigar@digiqc.com",
+          "displayName": "jigar@digiqc.com",
+          "resource": false
+        }
+      ],
+      "organizer": null,
+      "status": "confirmed"
+    },
+    {
       "id": "q3ie4tsv3vsj4pfotou950si4s@google.com|2026-04-27T03:10:00.000Z",
       "summary": "Flight to BLR (6E 6009)",
       "start": {
@@ -887,7 +911,7 @@
         "dateTime": "2026-04-28T05:30:00.000Z"
       },
       "end": {
-        "dateTime": "2026-04-28T07:30:00.000Z"
+        "dateTime": "2026-04-28T06:30:00.000Z"
       },
       "location": "2/4.3rd Floor, Langford Garden,Richmond Town, Benguluru, India 560025",
       "description": "",
