@@ -83,6 +83,7 @@
       <nav class="tabs">
         <button class="tab active" data-tab="mine">⚔️ Mine <span class="tab-count" id="mineCount"></span></button>
         <button class="tab" data-tab="delegated">👥 Delegated <span class="tab-count" id="delegatedCount"></span></button>
+        <button class="tab" data-tab="meetings">📝 Meetings <span class="tab-count" id="meetingsCount"></span></button>
         <button class="tab" data-tab="done">✅ Done</button>
         <button class="tab" data-tab="badges">🏆 Badges</button>
       </nav>
@@ -110,6 +111,23 @@
             <div class="empty-icon">👥</div>
             <div class="empty-title">Nothing delegated</div>
             <div class="empty-sub">Use the button above to assign a quest to someone. Tracking only — no XP.</div>
+          </div>
+        </section>
+
+        <section id="tab-meetings" class="tab-content">
+          <div class="tag-filter">
+            <button id="meetingAddBtn" class="filter-add-btn" title="Start a new meeting">
+              <span style="font-size:16px;line-height:1">+</span> <span>New Meeting</span>
+            </button>
+            <label class="meetings-archived-toggle">
+              <input type="checkbox" id="meetingsShowArchived" /> Show archived
+            </label>
+          </div>
+          <div id="meetingsTabList" class="list"></div>
+          <div id="meetingsTabEmpty" class="empty hidden">
+            <div class="empty-icon">📝</div>
+            <div class="empty-title">No meetings yet</div>
+            <div class="empty-sub">Tap + to start a new meeting. Take numbered notes during the call, then convert any note into a task.</div>
           </div>
         </section>
 
@@ -215,6 +233,30 @@
         <button type="button" class="btn btn-ghost" data-close-modal>Cancel</button>
         <button type="submit" class="btn btn-primary" id="taskSubmitBtn">
           <span class="btn-label">⚔️ Scribe Quest</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ================= MEETING MODAL (add / edit title + date) ================= -->
+<div id="meetingModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2 id="meetingModalTitle">📝 New Meeting</h2>
+      <button class="icon-btn" data-close-modal>✕</button>
+    </div>
+    <form id="meetingForm">
+      <label>Meeting Title *</label>
+      <input id="meetingTitleInput" type="text" required placeholder="Standup, 1:1 with Raj, Client call…" maxlength="120" />
+
+      <label>Date *</label>
+      <input id="meetingDateInput" type="date" required />
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" data-close-modal>Cancel</button>
+        <button type="submit" class="btn btn-primary" id="meetingSubmitBtn">
+          <span class="btn-label">📝 Start Meeting</span>
         </button>
       </div>
     </form>

@@ -10,6 +10,7 @@ const CONFIG = {
   metaMarkerStart: '<!-- quest-meta',
   metaMarkerEnd: '-->',
   stateLabel: 'quest',
+  meetingLabel: 'meeting',
   recurringPrefix: 'recurring:',
   tz: 'Asia/Kolkata'
 };
@@ -42,9 +43,14 @@ const S = {
   token: localStorage.getItem('ghToken') || null,
   name: localStorage.getItem('questName') || '',
   tasks: [],
+  meetings: [],
   labels: [],
   stats: null,
   activeTab: 'mine',
+  expandedMeetingIds_app: new Set(),
+  showArchivedMeetings: false,
+  editingMeetingId: null,
+  pendingNoteConversion: null,
   pendingCloseTask: null,
   pendingReopenTask: null,
   activeTagFilter: null,
@@ -259,6 +265,112 @@ async function updateLabel(oldName, newName, color) {
 
 async function deleteLabelApi(name) {
   return gh(`/repos/${CONFIG.owner}/${CONFIG.repo}/labels/${encodeURIComponent(name)}`, 'DELETE');
+}
+
+/* ========== MEETINGS ==========
+ * Meetings live as GitHub Issues with the 'meeting' label. Body holds
+ * a meta comment (date) followed by a markdown numbered list of notes.
+ * Each note may carry an inline `<!-- quest:NN -->` marker linking it
+ * to a converted quest. Note status renders live from S.tasks, so
+ * closing the linked quest flips the badge in the meeting view too.
+ *
+ * Archived meetings = GitHub Issue state === 'closed'. They're hidden
+ * from the list by default; toggle shows them greyed-out.
+ */
+
+const MEETING_META_START = '<!-- meeting-meta';
+const MEETING_META_END = '-->';
+
+function serializeMeeting({ date, notes }) {
+  const meta = `${MEETING_META_START}\nversion: 1\ndate: ${date}\n${MEETING_META_END}`;
+  const body = (notes && notes.length)
+    ? notes.map((n, i) => {
+        const q = n.questId ? ` <!-- quest:${n.questId} -->` : '';
+        return `${i + 1}. ${n.text}${q}`;
+      }).join('\n')
+    : '';
+  return `${meta}\n\n${body}`.trim();
+}
+
+function parseMeeting(issue) {
+  const body = issue.body || '';
+  const metaMatch = body.match(/<!--\s*meeting-meta([\s\S]*?)-->/);
+  const meta = {};
+  if (metaMatch) {
+    metaMatch[1].split('\n').forEach(line => {
+      const m = line.match(/^\s*([a-zA-Z]+):\s*(.+?)\s*$/);
+      if (m) meta[m[1]] = m[2];
+    });
+  }
+  const afterMeta = body.replace(/<!--\s*meeting-meta[\s\S]*?-->\s*/, '').trim();
+  const notes = [];
+  // Parse numbered list. Lines might also have an inline quest marker:
+  //   2. Raj to send API spec <!-- quest:142 -->
+  const lineRe = /^\s*(\d+)\.\s+([\s\S]*?)\s*(?:<!--\s*quest:(\d+)\s*-->)?\s*$/;
+  for (const raw of afterMeta.split('\n')) {
+    if (!raw.trim()) continue;
+    const m = raw.match(lineRe);
+    if (m) {
+      notes.push({
+        num: parseInt(m[1], 10),
+        text: (m[2] || '').trim(),
+        questId: m[3] ? parseInt(m[3], 10) : null
+      });
+    } else {
+      // Not a numbered line — treat as a plain note appended to previous
+      if (notes.length) notes[notes.length - 1].text += '\n' + raw;
+    }
+  }
+  return {
+    id: issue.number,
+    title: issue.title,
+    date: meta.date || (issue.created_at || '').slice(0, 10),
+    notes,
+    state: issue.state,
+    createdAt: issue.created_at,
+    closedAt: issue.closed_at,
+    issue
+  };
+}
+
+async function fetchAllMeetings() {
+  const out = [];
+  let page = 1;
+  while (true) {
+    const batch = await gh(`/repos/${CONFIG.owner}/${CONFIG.repo}/issues?state=all&per_page=100&page=${page}&labels=${CONFIG.meetingLabel}`);
+    if (!batch.length) break;
+    out.push(...batch.filter(i => !i.pull_request));
+    if (batch.length < 100) break;
+    page++;
+  }
+  return out.map(parseMeeting);
+}
+
+async function createMeetingApi(data) {
+  const body = serializeMeeting({ date: data.date, notes: [] });
+  return gh(`/repos/${CONFIG.owner}/${CONFIG.repo}/issues`, 'POST', {
+    title: data.title,
+    body,
+    labels: [CONFIG.meetingLabel]
+  });
+}
+
+async function updateMeetingApi(meeting) {
+  // Re-serialize the whole body from the current notes array.
+  const body = serializeMeeting({ date: meeting.date, notes: meeting.notes });
+  return gh(`/repos/${CONFIG.owner}/${CONFIG.repo}/issues/${meeting.id}`, 'PATCH', {
+    title: meeting.title,
+    body,
+    labels: [CONFIG.meetingLabel]
+  });
+}
+
+async function closeMeetingApi(meetingNumber) {
+  return gh(`/repos/${CONFIG.owner}/${CONFIG.repo}/issues/${meetingNumber}`, 'PATCH', { state: 'closed' });
+}
+
+async function reopenMeetingApi(meetingNumber) {
+  return gh(`/repos/${CONFIG.owner}/${CONFIG.repo}/issues/${meetingNumber}`, 'PATCH', { state: 'open' });
 }
 
 /* ========== GAMIFICATION ========== */
@@ -642,6 +754,7 @@ function renderAll() {
   renderHero();
   renderMineOpen();
   renderDelegatedOpen();
+  renderMeetingsTab();
   renderDone();
   renderBadgesGrid();
   renderTabCounts();
@@ -714,8 +827,231 @@ function renderDelegatedOpen() {
 function renderTabCounts() {
   const mineOpen = S.tasks.filter(t => t.state === 'open' && !t.assignee).length;
   const delegatedOpen = S.tasks.filter(t => t.state === 'open' && t.assignee).length;
+  const meetingsOpen = S.meetings.filter(m => m.state === 'open').length;
   const mineEl = $('#mineCount'); if (mineEl) mineEl.textContent = mineOpen ? `(${mineOpen})` : '';
   const delEl = $('#delegatedCount'); if (delEl) delEl.textContent = delegatedOpen ? `(${delegatedOpen})` : '';
+  const mtEl = $('#meetingsCount'); if (mtEl) mtEl.textContent = meetingsOpen ? `(${meetingsOpen})` : '';
+}
+
+/* ========== MEETINGS TAB ========== */
+
+function meetingNoteQuestStatus(questId) {
+  if (!questId) return null;
+  const q = S.tasks.find(t => t.id === questId);
+  if (!q) return { text: `Quest #${questId}`, cls: 'note-status-unknown' };
+  if (q.state === 'closed') return { text: '✓ Done', cls: 'note-status-done' };
+  const now = Date.now();
+  const d = q.deadline ? new Date(q.deadline).getTime() : null;
+  if (d && d < now) return { text: '⚠️ Overdue', cls: 'note-status-overdue' };
+  if (d && new Date(d).toDateString() === new Date().toDateString()) {
+    return { text: '🎯 Today', cls: 'note-status-today' };
+  }
+  return { text: q.assignee ? `👤 ${q.assignee}` : '🔵 Open', cls: q.assignee ? 'note-status-delegated' : 'note-status-open' };
+}
+
+function fmtMeetingDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function renderMeetingsTab() {
+  const list = $('#meetingsTabList');
+  const empty = $('#meetingsTabEmpty');
+  if (!list) return;
+  list.innerHTML = '';
+
+  const sorted = [...S.meetings].sort((a, b) => {
+    // Most recent date first; tie-break on createdAt
+    const da = new Date(a.date).getTime() || new Date(a.createdAt).getTime();
+    const db = new Date(b.date).getTime() || new Date(b.createdAt).getTime();
+    if (db !== da) return db - da;
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+  const visible = S.showArchivedMeetings ? sorted : sorted.filter(m => m.state === 'open');
+
+  empty.classList.toggle('hidden', visible.length > 0);
+  if (!visible.length) return;
+
+  // Group active vs archived when toggle is on
+  if (S.showArchivedMeetings) {
+    const active = visible.filter(m => m.state === 'open');
+    const archived = visible.filter(m => m.state === 'closed');
+    active.forEach(m => list.appendChild(renderMeetingCard(m)));
+    if (archived.length) {
+      const header = el('div', 'section-header', `<span>🗄️ ARCHIVED</span><span class="section-count">${archived.length}</span>`);
+      list.appendChild(header);
+      archived.forEach(m => list.appendChild(renderMeetingCard(m)));
+    }
+  } else {
+    visible.forEach(m => list.appendChild(renderMeetingCard(m)));
+  }
+}
+
+function renderMeetingCard(meeting) {
+  const card = el('div', `meeting-card-item ${meeting.state === 'closed' ? 'archived' : ''}`);
+  card.dataset.meetingId = meeting.id;
+
+  const noteCount = meeting.notes.length;
+  const convertedCount = meeting.notes.filter(n => n.questId).length;
+  const expanded = S.expandedMeetingIds_app.has(meeting.id);
+
+  const summaryBar = el('div', 'meeting-summary');
+  summaryBar.innerHTML = `
+    <div class="meeting-summary-main">
+      <div class="meeting-summary-title">${escapeHTML(meeting.title)}</div>
+      <div class="meeting-summary-meta">
+        📅 ${escapeHTML(fmtMeetingDate(meeting.date))}
+        · ${noteCount} note${noteCount !== 1 ? 's' : ''}${convertedCount ? ` · ${convertedCount} → task${convertedCount > 1 ? 's' : ''}` : ''}
+      </div>
+    </div>
+    <div class="meeting-summary-actions">
+      <button class="icon-btn meeting-edit-btn" title="Edit title / date">✏️</button>
+      <button class="icon-btn meeting-archive-btn" title="${meeting.state === 'closed' ? 'Unarchive' : 'Archive'}">${meeting.state === 'closed' ? '📂' : '🗄️'}</button>
+      <button class="icon-btn meeting-expand-btn" title="${expanded ? 'Collapse' : 'Expand'}">${expanded ? '▾' : '▸'}</button>
+    </div>
+  `;
+  card.appendChild(summaryBar);
+
+  summaryBar.addEventListener('click', (ev) => {
+    if (ev.target.closest('button')) return;
+    if (expanded) S.expandedMeetingIds_app.delete(meeting.id);
+    else S.expandedMeetingIds_app.add(meeting.id);
+    renderMeetingsTab();
+  });
+  summaryBar.querySelector('.meeting-expand-btn').addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    if (expanded) S.expandedMeetingIds_app.delete(meeting.id);
+    else S.expandedMeetingIds_app.add(meeting.id);
+    renderMeetingsTab();
+  });
+  summaryBar.querySelector('.meeting-edit-btn').addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    openMeetingModal(meeting);
+  });
+  summaryBar.querySelector('.meeting-archive-btn').addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    toggleMeetingArchive(meeting);
+  });
+
+  if (expanded) {
+    const notesWrap = el('div', 'meeting-notes');
+    meeting.notes.forEach(note => notesWrap.appendChild(renderNoteRow(meeting, note)));
+
+    // Add-note row
+    const addRow = el('div', 'meeting-note-add');
+    addRow.innerHTML = `
+      <span class="meeting-note-num">${meeting.notes.length + 1}.</span>
+      <input type="text" placeholder="Type a note and press Enter…" class="meeting-note-input" maxlength="500" />
+    `;
+    notesWrap.appendChild(addRow);
+    const input = addRow.querySelector('.meeting-note-input');
+    input.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const txt = input.value.trim();
+        if (!txt) return;
+        input.disabled = true;
+        await addNoteToMeeting(meeting.id, txt);
+        input.value = '';
+        input.disabled = false;
+        // Keep focus so you can type the next note
+        setTimeout(() => {
+          const newInput = document.querySelector(`.meeting-card-item[data-meeting-id="${meeting.id}"] .meeting-note-input`);
+          if (newInput) newInput.focus();
+        }, 0);
+      }
+    });
+
+    card.appendChild(notesWrap);
+  }
+
+  return card;
+}
+
+function renderNoteRow(meeting, note) {
+  const row = el('div', 'meeting-note-row');
+  row.dataset.noteNum = note.num;
+
+  const status = meetingNoteQuestStatus(note.questId);
+
+  row.innerHTML = `
+    <span class="meeting-note-num">${note.num}.</span>
+    <div class="meeting-note-body">
+      <div class="meeting-note-text">${escapeHTML(note.text)}</div>
+      ${status ? `<div class="meeting-note-status ${status.cls}">${escapeHTML(status.text)}${note.questId ? ` · <a href="#" data-quest-link="${note.questId}">#${note.questId}</a>` : ''}</div>` : ''}
+    </div>
+    <div class="meeting-note-actions">
+      ${note.questId ? '' : `
+        <button class="note-convert-btn note-convert-mine" title="Convert to quest (Mine)">→ ⚔️</button>
+        <button class="note-convert-btn note-convert-delegated" title="Convert to delegated quest">→ 👥</button>
+      `}
+      <button class="icon-btn note-edit-btn" title="Edit note">✏️</button>
+      <button class="icon-btn note-del-btn" title="Delete note">🗑️</button>
+    </div>
+  `;
+
+  const editBtn = row.querySelector('.note-edit-btn');
+  editBtn.addEventListener('click', () => beginEditNote(meeting, note, row));
+
+  const delBtn = row.querySelector('.note-del-btn');
+  delBtn.addEventListener('click', async () => {
+    if (note.questId) {
+      if (!confirm('This note is linked to a quest. Delete the note only (the quest stays)?')) return;
+    } else {
+      if (!confirm('Delete this note?')) return;
+    }
+    await deleteNoteFromMeeting(meeting.id, note.num);
+  });
+
+  const mineBtn = row.querySelector('.note-convert-mine');
+  if (mineBtn) mineBtn.addEventListener('click', () => convertNoteToQuest(meeting, note, 'mine'));
+  const delegatedBtn = row.querySelector('.note-convert-delegated');
+  if (delegatedBtn) delegatedBtn.addEventListener('click', () => convertNoteToQuest(meeting, note, 'delegated'));
+
+  const questLink = row.querySelector('[data-quest-link]');
+  if (questLink) {
+    questLink.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      const id = parseInt(questLink.dataset.questLink, 10);
+      const q = S.tasks.find(t => t.id === id);
+      if (q) openTaskModal(q);
+      else toast(`Quest #${id} not found in current view`, 'error');
+    });
+  }
+
+  return row;
+}
+
+function beginEditNote(meeting, note, row) {
+  const bodyEl = row.querySelector('.meeting-note-body');
+  const textEl = row.querySelector('.meeting-note-text');
+  const original = note.text;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'meeting-note-edit-input';
+  input.value = original;
+  input.maxLength = 500;
+  textEl.replaceWith(input);
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+
+  let done = false;
+  const commit = async (save) => {
+    if (done) return;
+    done = true;
+    if (save && input.value.trim() && input.value.trim() !== original) {
+      await updateNoteInMeeting(meeting.id, note.num, input.value.trim());
+    } else {
+      renderMeetingsTab();
+    }
+  };
+  input.addEventListener('blur', () => commit(true));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); commit(false); }
+  });
 }
 
 function renderDone() {
@@ -934,16 +1270,25 @@ async function handleTaskSubmit(ev) {
       toast('Quest updated ✓', 'success');
     } else {
       const created = await createTask(data);
+      let newTaskId = null;
       if (created) {
         const newTask = parseTask(created);
+        newTaskId = newTask.id;
         S.tasks.unshift(newTask);
         S.stats = computeStats(S.tasks);
         renderAll();
       }
-      floatXPAt('+5 XP', window.innerWidth / 2, window.innerHeight / 2);
+      // If this quest was born from a meeting note, stamp the note so future
+      // renders show the live status inline.
+      if (S.pendingNoteConversion && newTaskId) {
+        const { meetingId, noteNum } = S.pendingNoteConversion;
+        S.pendingNoteConversion = null;
+        linkNoteToQuest(meetingId, noteNum, newTaskId).catch(() => {});
+      }
+      floatXPAt(data.assignee ? '✓ Assigned' : '+5 XP', window.innerWidth / 2, window.innerHeight / 2);
       sparkle(window.innerWidth / 2, window.innerHeight / 2);
       playSound('add');
-      toast('⚔️ Quest scribed!', 'success');
+      toast(data.assignee ? '👥 Quest assigned!' : '⚔️ Quest scribed!', 'success');
     }
     closeModals();
     refresh().catch(() => {});
@@ -952,6 +1297,143 @@ async function handleTaskSubmit(ev) {
   } finally {
     btn.disabled = false;
   }
+}
+
+/* ========== MEETINGS MODAL + NOTE OPS ========== */
+
+function openMeetingModal(meeting = null) {
+  S.editingMeetingId = meeting ? meeting.id : null;
+  $('#meetingModalTitle').textContent = meeting ? '✏️ Edit Meeting' : '📝 New Meeting';
+  $('#meetingTitleInput').value = meeting ? meeting.title : '';
+  const pad = n => String(n).padStart(2, '0');
+  const today = new Date();
+  const defaultDate = meeting && meeting.date
+    ? meeting.date.slice(0, 10)
+    : `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  $('#meetingDateInput').value = defaultDate;
+  $('#meetingSubmitBtn .btn-label').textContent = meeting ? '💾 Save' : '📝 Start Meeting';
+  $('#meetingModal').classList.remove('hidden');
+  setTimeout(() => $('#meetingTitleInput').focus(), 100);
+}
+
+async function handleMeetingSubmit(ev) {
+  ev.preventDefault();
+  const btn = $('#meetingSubmitBtn');
+  btn.disabled = true;
+  try {
+    const title = $('#meetingTitleInput').value.trim();
+    const date = $('#meetingDateInput').value;
+    if (!title || !date) { toast('Title and date are required', 'error'); return; }
+
+    if (S.editingMeetingId) {
+      const meeting = S.meetings.find(m => m.id === S.editingMeetingId);
+      if (!meeting) throw new Error('Meeting not found');
+      const updated = { ...meeting, title, date };
+      // Optimistic
+      const idx = S.meetings.findIndex(m => m.id === meeting.id);
+      S.meetings[idx] = updated;
+      renderMeetingsTab();
+      const serverIssue = await updateMeetingApi(updated);
+      S.meetings[idx] = parseMeeting(serverIssue);
+      renderMeetingsTab();
+      toast('Meeting updated ✓', 'success');
+    } else {
+      const created = await createMeetingApi({ title, date });
+      const newMeeting = parseMeeting(created);
+      S.meetings.unshift(newMeeting);
+      S.expandedMeetingIds_app.add(newMeeting.id);
+      renderMeetingsTab();
+      renderTabCounts();
+      toast('📝 Meeting started', 'success');
+    }
+    closeModals();
+    refresh().catch(() => {});
+  } catch (e) {
+    toast('Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function patchMeetingNotes(meetingId, mutate) {
+  const idx = S.meetings.findIndex(m => m.id === meetingId);
+  if (idx < 0) return;
+  const prev = S.meetings[idx];
+  const nextNotes = mutate(prev.notes.slice());
+  // Renumber so gaps don't appear after deletes
+  const renumbered = nextNotes.map((n, i) => ({ ...n, num: i + 1 }));
+  const next = { ...prev, notes: renumbered };
+  S.meetings[idx] = next;
+  renderMeetingsTab();
+  try {
+    const updated = await updateMeetingApi(next);
+    S.meetings[idx] = parseMeeting(updated);
+    renderMeetingsTab();
+  } catch (e) {
+    // Roll back
+    S.meetings[idx] = prev;
+    renderMeetingsTab();
+    toast('Note save failed: ' + e.message, 'error');
+  }
+}
+
+async function addNoteToMeeting(meetingId, text) {
+  return patchMeetingNotes(meetingId, notes => {
+    notes.push({ num: notes.length + 1, text, questId: null });
+    return notes;
+  });
+}
+
+async function updateNoteInMeeting(meetingId, num, text) {
+  return patchMeetingNotes(meetingId, notes =>
+    notes.map(n => n.num === num ? { ...n, text } : n)
+  );
+}
+
+async function deleteNoteFromMeeting(meetingId, num) {
+  return patchMeetingNotes(meetingId, notes => notes.filter(n => n.num !== num));
+}
+
+async function linkNoteToQuest(meetingId, noteNum, questId) {
+  return patchMeetingNotes(meetingId, notes =>
+    notes.map(n => n.num === noteNum ? { ...n, questId } : n)
+  );
+}
+
+async function toggleMeetingArchive(meeting) {
+  const wasOpen = meeting.state === 'open';
+  const idx = S.meetings.findIndex(m => m.id === meeting.id);
+  if (idx < 0) return;
+  // Optimistic
+  S.meetings[idx] = { ...meeting, state: wasOpen ? 'closed' : 'open' };
+  renderMeetingsTab();
+  renderTabCounts();
+  try {
+    if (wasOpen) await closeMeetingApi(meeting.id);
+    else await reopenMeetingApi(meeting.id);
+  } catch (e) {
+    S.meetings[idx] = meeting;
+    renderMeetingsTab();
+    renderTabCounts();
+    toast('Archive failed: ' + e.message, 'error');
+  }
+}
+
+function convertNoteToQuest(meeting, note, mode) {
+  // Stash the pending conversion; we pick it up after the task modal's submit
+  // succeeds to stamp the note with the new quest id.
+  S.pendingNoteConversion = { meetingId: meeting.id, noteNum: note.num };
+
+  // Reuse the quest modal. Pre-fill title and notes (backlink to meeting).
+  const meetingLink = `From meeting **${meeting.title}** (${fmtMeetingDate(meeting.date)}) — [open #${meeting.id}](${meeting.issue.html_url})`;
+  openTaskModal(null, { mode });
+  // Post-open overrides
+  setTimeout(() => {
+    $('#taskTitle').value = note.text.slice(0, 200);
+    $('#taskNotes').value = meetingLink;
+    $('#taskTitle').focus();
+    $('#taskTitle').select();
+  }, 120);
 }
 
 /* ========== CLOSE / REOPEN / DELETE ========== */
@@ -1335,6 +1817,9 @@ function playSound(kind) {
 function closeModals() {
   $$('.modal').forEach(m => m.classList.add('hidden'));
   $('#levelUpModal').classList.add('hidden');
+  // If the user cancels a note→task conversion mid-flow, drop the pending
+  // link so the *next* quest they scribe doesn't get wrongly stamped.
+  S.pendingNoteConversion = null;
 }
 
 /* ========== LOAD ========== */
@@ -1343,7 +1828,10 @@ async function loadLabels() {
 }
 
 async function refresh() {
-  const issues = await fetchAllIssues();
+  const [issues, meetingIssues] = await Promise.all([
+    fetchAllIssues(),
+    fetchAllMeetings().catch(e => { console.warn('meetings fetch failed', e); return []; })
+  ]);
   const serverTasks = issues
     .map(parseTask)
     .filter(t => !(t.issue.labels || []).some(l => l.name === 'deleted'));
@@ -1362,6 +1850,17 @@ async function refresh() {
   S.tasks = pendingLocal.length
     ? [...pendingLocal, ...serverTasks]
     : serverTasks;
+
+  // Same eventual-consistency guard for meetings.
+  const serverMeetingIds = new Set(meetingIssues.map(m => m.id));
+  const pendingLocalMeetings = S.meetings.filter(m =>
+    !serverMeetingIds.has(m.id) &&
+    m.createdAt &&
+    (now - new Date(m.createdAt).getTime()) < 60_000
+  );
+  S.meetings = pendingLocalMeetings.length
+    ? [...pendingLocalMeetings, ...meetingIssues]
+    : meetingIssues;
 
   const oldStats = S.stats;
   S.stats = computeStats(S.tasks);
@@ -1527,11 +2026,19 @@ function wireEvents() {
 
   $('#fab').addEventListener('click', () => {
     // FAB follows the active tab so you never accidentally assign to yourself
-    // when you're browsing Delegated, or vice-versa.
+    // when you're browsing Delegated, or vice-versa. On the Meetings tab it
+    // starts a new meeting instead.
+    if (S.activeTab === 'meetings') { openMeetingModal(); return; }
     const mode = S.activeTab === 'delegated' ? 'delegated' : 'mine';
     openTaskModal(null, { mode });
   });
   $('#delegatedAddBtn')?.addEventListener('click', () => openTaskModal(null, { mode: 'delegated' }));
+  $('#meetingAddBtn')?.addEventListener('click', () => openMeetingModal());
+  $('#meetingForm')?.addEventListener('submit', handleMeetingSubmit);
+  $('#meetingsShowArchived')?.addEventListener('change', (ev) => {
+    S.showArchivedMeetings = ev.target.checked;
+    renderMeetingsTab();
+  });
   $('#menuBtn').addEventListener('click', () => $('#menuModal').classList.remove('hidden'));
   $('#heroName').addEventListener('click', () => changeName());
   $('#avatar').addEventListener('click', () => changeName());
