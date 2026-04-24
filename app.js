@@ -14,12 +14,6 @@ const CONFIG = {
   tz: 'Asia/Kolkata'
 };
 
-const GCAL_CONFIG = {
-  clientId: '458708599728-9lmsjmkq0gqcof38uopgnsnse5l5hceg.apps.googleusercontent.com',
-  scope: 'https://www.googleapis.com/auth/calendar.readonly',
-  lookAheadDays: 2
-};
-
 const BADGES = [
   { id: 'first_quest',    icon: '🎯', name: 'First Quest',      desc: 'Add your first quest' },
   { id: 'first_victory',  icon: '⚔️', name: 'First Victory',    desc: 'Close your first quest' },
@@ -50,7 +44,7 @@ const S = {
   tasks: [],
   labels: [],
   stats: null,
-  activeTab: 'all',
+  activeTab: 'mine',
   pendingCloseTask: null,
   pendingReopenTask: null,
   activeTagFilter: null,
@@ -62,10 +56,11 @@ const S = {
   prevBadges: new Set(),
   lastRefreshAt: 0,
   autoRefreshTimer: null,
-  gcalToken: localStorage.getItem('gcalToken') || null,
-  gcalTokenExpiry: parseInt(localStorage.getItem('gcalTokenExpiry') || '0', 10),
-  gcalStatus: 'disconnected',
+  // Meetings are served from a committed meetings.json file — no OAuth.
+  // 'loading' before first fetch, 'ready' once we have data, 'error' on failure.
+  gcalStatus: 'loading',
   gcalMeetings: [],
+  gcalGeneratedAt: null,
   gcalTimer: null,
   gcalCountdownTimer: null,
   gcalRange: localStorage.getItem('gcalRange') || 'upcoming',
@@ -160,8 +155,9 @@ async function ensureBaseLabels() {
 }
 
 /* ========== TASK SERIALIZATION ========== */
-function serializeTask({ deadline, recurring, notes, createdAt }) {
-  const meta = `${CONFIG.metaMarkerStart}\nversion: 1\ndeadline: ${deadline}\nrecurring: ${recurring || 'none'}\ncreatedAt: ${createdAt}\n${CONFIG.metaMarkerEnd}`;
+function serializeTask({ deadline, recurring, assignee, notes, createdAt }) {
+  const assigneeLine = assignee ? `\nassignee: ${assignee}` : '';
+  const meta = `${CONFIG.metaMarkerStart}\nversion: 1\ndeadline: ${deadline}\nrecurring: ${recurring || 'none'}${assigneeLine}\ncreatedAt: ${createdAt}\n${CONFIG.metaMarkerEnd}`;
   return `${meta}\n\n${notes || ''}`.trim();
 }
 
@@ -171,6 +167,7 @@ function parseTask(issue) {
   const meta = {};
   if (metaMatch) {
     metaMatch[1].split('\n').forEach(line => {
+      // assignee names can contain spaces/punctuation, so capture everything after "key:"
       const m = line.match(/^\s*([a-zA-Z]+):\s*(.+?)\s*$/);
       if (m) meta[m[1]] = m[2];
     });
@@ -187,6 +184,7 @@ function parseTask(issue) {
     title: issue.title,
     deadline: meta.deadline || null,
     recurring,
+    assignee: meta.assignee || '',
     notes,
     tags: tagLabels,
     state: issue.state,
@@ -203,6 +201,7 @@ async function createTask(data) {
   const body = serializeTask({
     deadline: data.deadline,
     recurring: data.recurring,
+    assignee: data.assignee,
     notes: data.notes,
     createdAt: new Date().toISOString()
   });
@@ -219,6 +218,7 @@ async function updateTask(issueNumber, data) {
   const body = serializeTask({
     deadline: data.deadline,
     recurring: data.recurring,
+    assignee: data.assignee,
     notes: data.notes,
     createdAt
   });
@@ -293,7 +293,9 @@ function computeCloseXP(task) {
 
 function computeStats(tasks) {
   const now = Date.now();
-  const active = tasks.filter(t => !(t.issue?.labels || []).some(l => l.name === 'deleted'));
+  // Delegated quests are tracking-only — they don't feed XP, HP, streaks, or badges.
+  // The user didn't do the work, so their personal stats shouldn't reflect it.
+  const active = tasks.filter(t => !(t.issue?.labels || []).some(l => l.name === 'deleted') && !t.assignee);
   const closed = active.filter(t => t.state === 'closed');
   const open = active.filter(t => t.state === 'open');
   const overdue = open.filter(t => t.deadline && new Date(t.deadline).getTime() < now);
@@ -386,6 +388,7 @@ async function handleRecurring(task) {
     title: task.title,
     deadline: nextDeadline,
     recurring: task.recurring,
+    assignee: task.assignee,
     notes: task.notes,
     tags: task.tags
   });
@@ -457,6 +460,9 @@ function renderTaskCard(task, opts = {}) {
   const recurringHTML = task.recurring && task.recurring !== 'none'
     ? `<span class="task-recurring">🔁 ${task.recurring}</span>` : '';
 
+  const assigneeHTML = task.assignee
+    ? `<span class="task-assignee">👤 ${escapeHTML(task.assignee)}</span>` : '';
+
   const imageUrls = extractImageUrls(task.notes);
   const textOnly = notesTextOnly(task.notes);
   const hasNotes = textOnly || imageUrls.length;
@@ -480,6 +486,7 @@ function renderTaskCard(task, opts = {}) {
       <div class="task-title">${escapeHTML(task.title)}</div>
       <div class="task-meta">
         <span class="task-deadline ${dl.cls}">${dl.text}</span>
+        ${assigneeHTML}
         ${tagsHTML}
         ${recurringHTML}
         ${photoBadgeHTML}
@@ -592,6 +599,7 @@ function enterInlineNoteEdit(card, task) {
         title: task.title,
         deadline: task.deadline,
         recurring: task.recurring,
+        assignee: task.assignee,
         notes: newNotes,
         tags: task.tags
       });
@@ -631,27 +639,29 @@ function enterInlineNoteEdit(card, task) {
 /* ========== UI: RENDER TABS ========== */
 function renderAll() {
   renderHero();
-  renderAllOpen();
+  renderMineOpen();
+  renderDelegatedOpen();
   renderDone();
   renderBadgesGrid();
+  renderTabCounts();
 }
 
 function isOverdue(t) {
   return t.state === 'open' && t.deadline && new Date(t.deadline).getTime() < Date.now();
 }
 
-function renderAllOpen() {
-  renderTagFilter();
-  const list = $('#allList'); list.innerHTML = '';
+function renderOpenList(items, listEl, emptyEl, { enableTagFilter = false } = {}) {
+  listEl.innerHTML = '';
 
-  let items = S.tasks.filter(t => t.state === 'open');
-  if (S.activeTagFilter === '__overdue__') {
-    items = items.filter(isOverdue);
-  } else if (S.activeTagFilter) {
-    items = items.filter(t => t.tags.includes(S.activeTagFilter));
+  if (enableTagFilter) {
+    if (S.activeTagFilter === '__overdue__') {
+      items = items.filter(isOverdue);
+    } else if (S.activeTagFilter) {
+      items = items.filter(t => t.tags.includes(S.activeTagFilter));
+    }
   }
 
-  $('#allEmpty').classList.toggle('hidden', items.length > 0);
+  emptyEl.classList.toggle('hidden', items.length > 0);
   if (!items.length) return;
 
   const now = Date.now();
@@ -678,8 +688,8 @@ function renderAllOpen() {
     if (!arr.length) return;
     const header = el('div', `section-header ${headerCls}`);
     header.innerHTML = `<span>${icon} ${escapeHTML(label)}</span><span class="section-count">${arr.length}</span>${dateStr ? `<span class="section-date">${escapeHTML(dateStr)}</span>` : ''}`;
-    list.appendChild(header);
-    arr.forEach(t => list.appendChild(renderTaskCard(t)));
+    listEl.appendChild(header);
+    arr.forEach(t => listEl.appendChild(renderTaskCard(t)));
   };
 
   addSection(sections.overdue, '⚠️', 'OVERDUE', 'overdue');
@@ -687,6 +697,24 @@ function renderAllOpen() {
   addSection(sections.tomorrow, '📅', 'TOMORROW', 'tomorrow', fmtDate(startTomorrow));
   addSection(sections.upcoming, '🗓️', 'UPCOMING', 'upcoming');
   addSection(sections.noDeadline, '🕐', 'NO DEADLINE', '');
+}
+
+function renderMineOpen() {
+  renderTagFilter();
+  const items = S.tasks.filter(t => t.state === 'open' && !t.assignee);
+  renderOpenList(items, $('#mineList'), $('#mineEmpty'), { enableTagFilter: true });
+}
+
+function renderDelegatedOpen() {
+  const items = S.tasks.filter(t => t.state === 'open' && t.assignee);
+  renderOpenList(items, $('#delegatedList'), $('#delegatedEmpty'), { enableTagFilter: false });
+}
+
+function renderTabCounts() {
+  const mineOpen = S.tasks.filter(t => t.state === 'open' && !t.assignee).length;
+  const delegatedOpen = S.tasks.filter(t => t.state === 'open' && t.assignee).length;
+  const mineEl = $('#mineCount'); if (mineEl) mineEl.textContent = mineOpen ? `(${mineOpen})` : '';
+  const delEl = $('#delegatedCount'); if (delEl) delEl.textContent = delegatedOpen ? `(${delegatedOpen})` : '';
 }
 
 function renderDone() {
@@ -700,7 +728,8 @@ function renderDone() {
 
 function renderTagFilter() {
   const wrap = $('#tagFilter'); wrap.innerHTML = '';
-  const openTasks = S.tasks.filter(t => t.state === 'open');
+  // Tag filter belongs to the Mine tab — only reflect self-assigned open tasks
+  const openTasks = S.tasks.filter(t => t.state === 'open' && !t.assignee);
   const tagsInUse = new Set(openTasks.flatMap(t => t.tags));
   const overdueCount = openTasks.filter(isOverdue).length;
 
@@ -712,7 +741,7 @@ function renderTagFilter() {
   wrap.appendChild(addBtn);
 
   const allChip = el('div', `tag-filter-chip ${!S.activeTagFilter ? 'active' : ''}`, 'All');
-  allChip.addEventListener('click', () => { S.activeTagFilter = null; renderAllOpen(); });
+  allChip.addEventListener('click', () => { S.activeTagFilter = null; renderMineOpen(); });
   wrap.appendChild(allChip);
 
   if (overdueCount > 0) {
@@ -720,7 +749,7 @@ function renderTagFilter() {
     const ovChip = el('div', `tag-filter-chip overdue-chip ${active ? 'active' : ''}`, `⚠️ Overdue (${overdueCount})`);
     ovChip.addEventListener('click', () => {
       S.activeTagFilter = active ? null : '__overdue__';
-      renderAllOpen();
+      renderMineOpen();
     });
     wrap.appendChild(ovChip);
   }
@@ -731,7 +760,7 @@ function renderTagFilter() {
     if (lbl && S.activeTagFilter === tname) chip.style.background = `#${lbl.color}55`;
     chip.addEventListener('click', () => {
       S.activeTagFilter = S.activeTagFilter === tname ? null : tname;
-      renderAllOpen();
+      renderMineOpen();
     });
     wrap.appendChild(chip);
   });
@@ -759,6 +788,7 @@ function openTaskModal(task = null) {
   S.selectedTags = new Set(task ? task.tags : []);
   $('#taskModalTitle').textContent = task ? '✏️ Edit Quest' : '⚔️ New Quest';
   $('#taskTitle').value = task ? task.title : '';
+  $('#taskAssignee').value = task ? task.assignee || '' : '';
   $('#taskRecurring').value = task ? task.recurring || 'none' : 'none';
   const existingNotes = task ? task.notes : '';
   $('#taskNotes').value = notesTextOnly(existingNotes);
@@ -858,6 +888,7 @@ async function handleTaskSubmit(ev) {
       title,
       deadline,
       recurring: $('#taskRecurring').value,
+      assignee: $('#taskAssignee').value.trim(),
       notes: combineNotes(textNotes, modalPhotos),
       tags: [...S.selectedTags]
     };
@@ -893,13 +924,16 @@ async function handleTaskSubmit(ev) {
 /* ========== CLOSE / REOPEN / DELETE ========== */
 function askCloseConfirm(task) {
   S.pendingCloseTask = task;
-  const xp = computeCloseXP({ ...task, closedAt: new Date().toISOString() });
+  // Delegated tasks are tracking-only — no XP so the reward display is skipped.
+  const xp = task.assignee ? 0 : computeCloseXP({ ...task, closedAt: new Date().toISOString() });
   $('#confirmCloseTitle').textContent = task.title;
   $('#confirmCloseXP').textContent = xp;
   const isLate = task.deadline && new Date(task.deadline).getTime() < Date.now();
-  $('#confirmCloseSub').textContent = isLate
-    ? 'Better late than never — claim your reward!'
-    : 'Victory awaits, adventurer!';
+  $('#confirmCloseSub').textContent = task.assignee
+    ? `Marking delegated quest for ${task.assignee} as done.`
+    : isLate
+      ? 'Better late than never — claim your reward!'
+      : 'Victory awaits, adventurer!';
   $('#closeModal').classList.remove('hidden');
   playSound('add');
 }
@@ -918,10 +952,11 @@ async function doCloseTask() {
   const rect = card ? card.getBoundingClientRect() : null;
   const cx = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
   const cy = rect ? rect.top + rect.height / 2 : window.innerHeight / 2;
-  const xpReward = computeCloseXP({ ...task, closedAt: new Date().toISOString() });
+  const xpReward = task.assignee ? 0 : computeCloseXP({ ...task, closedAt: new Date().toISOString() });
 
   $('#closeModal').classList.add('hidden');
-  floatXPAt(`+${xpReward} XP`, cx, cy);
+  if (xpReward > 0) floatXPAt(`+${xpReward} XP`, cx, cy);
+  else floatXPAt(`✓ Done`, cx, cy);
   burstConfetti(cx / window.innerWidth, cy / window.innerHeight);
   setTimeout(() => burstConfetti(Math.random(), Math.random() * 0.3), 150);
   playSound('complete');
@@ -957,7 +992,7 @@ async function doCloseTask() {
 
 function askReopenConfirm(task) {
   S.pendingReopenTask = task;
-  const xp = computeCloseXP(task);
+  const xp = task.assignee ? 0 : computeCloseXP(task);
   $('#confirmReopenTitle').textContent = task.title;
   $('#confirmReopenXP').textContent = xp;
   $('#reopenModal').classList.remove('hidden');
@@ -971,19 +1006,21 @@ async function doReopenTask() {
   btn.disabled = true;
   $('#reopenModal').classList.add('hidden');
 
-  const xpLoss = computeCloseXP(task);
-  // -XP float in center of viewport — always visible
-  floatLossAt(`−${xpLoss} XP`, window.innerWidth / 2, window.innerHeight * 0.4);
-  const hpBar = document.querySelector('.hp-bar');
-  if (hpBar) {
-    hpBar.classList.add('hp-hit');
-    setTimeout(() => hpBar.classList.remove('hp-hit'), 600);
+  const xpLoss = task.assignee ? 0 : computeCloseXP(task);
+  if (xpLoss > 0) {
+    floatLossAt(`−${xpLoss} XP`, window.innerWidth / 2, window.innerHeight * 0.4);
+    const hpBar = document.querySelector('.hp-bar');
+    if (hpBar) {
+      hpBar.classList.add('hp-hit');
+      setTimeout(() => hpBar.classList.remove('hp-hit'), 600);
+    }
   }
   playSound('add');
 
-  // Find the card and fly it toward the "All" tab button
+  // Find the card and fly it toward the tab it's landing in (Mine or Delegated)
+  const targetTabName = task.assignee ? 'delegated' : 'mine';
   const sourceCard = document.querySelector(`.task[data-task-id="${task.id}"]`);
-  const flight = sourceCard ? flyCardToAllTab(sourceCard) : Promise.resolve();
+  const flight = sourceCard ? flyCardToTab(sourceCard, targetTabName) : Promise.resolve();
 
   try {
     const reopened = await reopenTaskApi(task.id);
@@ -991,12 +1028,11 @@ async function doReopenTask() {
     if (idx >= 0 && reopened) S.tasks[idx] = parseTask(reopened);
     S.stats = computeStats(S.tasks);
 
-    // Pulse the All tab to show where the quest landed
-    pulseAllTab();
+    pulseTab(targetTabName);
 
     await flight;
     renderAll();
-    toast(`↩️ Quest reopened → All tab  •  −${xpLoss} XP`, 'error');
+    toast(`↩️ Quest reopened → ${targetTabName === 'delegated' ? 'Delegated' : 'Mine'} tab  •  ${task.assignee ? '' : `−${xpLoss} XP`}`, 'error');
     refresh().catch(() => {});
   } catch (e) {
     toast('Could not reopen: ' + e.message, 'error');
@@ -1005,12 +1041,12 @@ async function doReopenTask() {
   }
 }
 
-function flyCardToAllTab(card) {
+function flyCardToTab(card, tabName) {
   return new Promise(resolve => {
-    const allTab = document.querySelector('.tab[data-tab="all"]');
-    if (!allTab) { resolve(); return; }
+    const targetTab = document.querySelector(`.tab[data-tab="${tabName}"]`);
+    if (!targetTab) { resolve(); return; }
     const cardRect = card.getBoundingClientRect();
-    const tabRect = allTab.getBoundingClientRect();
+    const tabRect = targetTab.getBoundingClientRect();
     const dx = (tabRect.left + tabRect.width / 2) - (cardRect.left + cardRect.width / 2);
     const dy = (tabRect.top + tabRect.height / 2) - (cardRect.top + cardRect.height / 2);
 
@@ -1053,11 +1089,11 @@ function flyCardToAllTab(card) {
   });
 }
 
-function pulseAllTab() {
-  const allTab = document.querySelector('.tab[data-tab="all"]');
-  if (!allTab) return;
-  allTab.classList.add('tab-receiving');
-  setTimeout(() => allTab.classList.remove('tab-receiving'), 900);
+function pulseTab(tabName) {
+  const t = document.querySelector(`.tab[data-tab="${tabName}"]`);
+  if (!t) return;
+  t.classList.add('tab-receiving');
+  setTimeout(() => t.classList.remove('tab-receiving'), 900);
 }
 
 async function deleteTaskFlow(task, card) {
@@ -1459,17 +1495,7 @@ function wireEvents() {
 
   $('#refreshHeroBtn').addEventListener('click', () => userRefresh({ silent: false }));
 
-  $('#gcalConnectBtn')?.addEventListener('click', async () => {
-    const btn = $('#gcalConnectBtn');
-    btn.disabled = true;
-    btn.textContent = '⏳ Connecting…';
-    await connectGcal();
-    btn.disabled = false;
-    btn.textContent = '🔗 Connect Calendar';
-    if (S.gcalStatus === 'connected') startGcalPolling();
-  });
   $('#gcalRefreshBtn')?.addEventListener('click', async () => {
-    if (S.gcalStatus !== 'connected') { await connectGcal(); return; }
     const btn = $('#gcalRefreshBtn');
     btn.classList.add('spinning');
     await refreshMeetings();
@@ -1478,7 +1504,6 @@ function wireEvents() {
   document.querySelectorAll('.gcal-range-btn').forEach(btn => {
     btn.addEventListener('click', () => setGcalRange(btn.dataset.range));
   });
-  // Mark default active range
   document.querySelectorAll('.gcal-range-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.range === S.gcalRange);
   });
@@ -1489,18 +1514,18 @@ function wireEvents() {
       if (!S.lastRefreshAt || Date.now() - S.lastRefreshAt > STALE_THRESHOLD_MS) {
         userRefresh({ silent: true }).catch(() => {});
       }
-      if (S.gcalStatus === 'connected') refreshMeetings().catch(() => {});
+      refreshMeetings().catch(() => {});
     }
   });
   window.addEventListener('focus', () => {
     if (S.token && (!S.lastRefreshAt || Date.now() - S.lastRefreshAt > STALE_THRESHOLD_MS)) {
       userRefresh({ silent: true }).catch(() => {});
     }
-    if (S.gcalStatus === 'connected') refreshMeetings().catch(() => {});
+    refreshMeetings().catch(() => {});
   });
   window.addEventListener('pageshow', (e) => {
     if (e.persisted && S.token) userRefresh({ silent: true }).catch(() => {});
-    if (e.persisted && S.gcalStatus === 'connected') refreshMeetings().catch(() => {});
+    if (e.persisted) refreshMeetings().catch(() => {});
   });
   $('#soundToggleBtn').addEventListener('click', () => {
     S.soundOn = !S.soundOn;
@@ -1508,18 +1533,8 @@ function wireEvents() {
     $('#soundToggleBtn').textContent = `🔊 Sound: ${S.soundOn ? 'On' : 'Off'}`;
   });
   $('#soundToggleBtn').textContent = `🔊 Sound: ${S.soundOn ? 'On' : 'Off'}`;
-  refreshGcalMenuLabel();
   $('#tagManagerOpenBtn').addEventListener('click', () => { closeModals(); openTagManager(); });
   $('#changeNameBtn').addEventListener('click', () => { closeModals(); changeName(); });
-  $('#gcalMenuBtn').addEventListener('click', async () => {
-    closeModals();
-    if (S.gcalStatus === 'connected') {
-      if (confirm('Disconnect Google Calendar? You can reconnect anytime.')) disconnectGcal();
-    } else {
-      await connectGcal();
-      if (S.gcalStatus === 'connected') startGcalPolling();
-    }
-  });
   $('#installBtn').addEventListener('click', installApp);
   $('#logoutBtn').addEventListener('click', logout);
   $('#levelUpClose').addEventListener('click', () => $('#levelUpModal').classList.add('hidden'));
@@ -1757,150 +1772,27 @@ function createPhotoStrip({ getUrls, setUrls, onChange }) {
   return { el: strip, refresh: renderStrip, isUploading: () => strip.classList.contains('is-uploading') };
 }
 
-/* ========== GOOGLE CALENDAR ========== */
-let gcalTokenClient = null;
+/* ========== GOOGLE CALENDAR (iCal JSON, no OAuth) ==========
+ * Meetings are fetched from a committed `meetings.json` that a GitHub Action
+ * refreshes every 15 min from GCAL_ICAL_URL. Replaces the previous Google
+ * Identity Services flow, which issued 1-hour access tokens with no refresh
+ * token — silent re-auth was blocked by third-party cookie policies, so the
+ * app kept "logging out" every hour. Same-origin fetch → no CORS, no OAuth,
+ * no expiry.
+ */
 const GCAL_MEETINGS_POLL_MS = 5 * 60 * 1000;
+const MEETINGS_JSON_URL = 'meetings.json';
 
-function gisReady() {
-  return typeof google !== 'undefined' && google.accounts && google.accounts.oauth2;
-}
-
-function showGisBlockedHelp() {
-  const existing = document.getElementById('gisBlockedOverlay');
-  if (existing) existing.remove();
-  const overlay = document.createElement('div');
-  overlay.id = 'gisBlockedOverlay';
-  overlay.className = 'modal';
-  overlay.innerHTML = `
-    <div class="modal-card" style="max-width:480px">
-      <div class="modal-header">
-        <h2>🚫 Google SDK Blocked</h2>
-        <button class="icon-btn" data-close-modal>✕</button>
-      </div>
-      <p style="font-size:13px;color:#d4c9f0;line-height:1.6;margin-bottom:12px">
-        The Google Identity script (<code>accounts.google.com/gsi/client</code>) didn't load.
-        Calendar integration can't work without it.
-      </p>
-      <p style="font-size:13px;color:#a78bfa;font-weight:600;margin-bottom:8px">Likely causes:</p>
-      <ul style="font-size:13px;color:#d4c9f0;line-height:1.7;padding-left:20px;margin-bottom:16px">
-        <li><strong>Ad blocker / privacy extension</strong> (uBlock, Ghostery, Brave shields, AdGuard) — whitelist this site or pause for this tab</li>
-        <li><strong>Strict tracking protection</strong> — try Safari/Chrome's standard mode, or disable "strict" tracking prevention</li>
-        <li><strong>Corporate / school firewall</strong> — it may block <code>accounts.google.com</code>. Try a different network</li>
-        <li><strong>VPN</strong> — some VPN regions block Google. Try disabling</li>
-      </ul>
-      <p style="font-size:12px;color:#7e72a0;margin-bottom:14px">
-        Test loading the script directly: open <a href="https://accounts.google.com/gsi/client" target="_blank" rel="noopener" style="color:#a78bfa">this link</a> — it should show JavaScript code. If it fails, your network is blocking Google.
-      </p>
-      <div class="modal-actions">
-        <button class="btn btn-ghost" data-close-modal>Close</button>
-        <button class="btn btn-primary" id="gisRetryBtn">🔁 Retry</button>
-      </div>
-    </div>
-  `;
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-  overlay.querySelectorAll('[data-close-modal]').forEach(b => b.addEventListener('click', () => overlay.remove()));
-  overlay.querySelector('#gisRetryBtn').addEventListener('click', () => {
-    overlay.remove();
-    connectGcal();
-  });
-  document.body.appendChild(overlay);
-}
-
-function waitForGis(timeoutMs = 15000) {
-  return new Promise((resolve, reject) => {
-    // If GIS is already loaded, resolve immediately
-    if (gisReady()) return resolve();
-
-    // If the <script> tag is missing (was removed / never added), inject it now
-    const GSI_URL = 'https://accounts.google.com/gsi/client';
-    let scriptEl = document.querySelector(`script[src="${GSI_URL}"]`);
-    if (!scriptEl) {
-      scriptEl = document.createElement('script');
-      scriptEl.src = GSI_URL;
-      scriptEl.async = true;
-      scriptEl.defer = true;
-      document.head.appendChild(scriptEl);
-    }
-
-    // Detect hard failure (blocked by extension / network)
-    let errored = false;
-    scriptEl.addEventListener('error', () => { errored = true; }, { once: true });
-
-    const start = Date.now();
-    (function poll() {
-      if (gisReady()) return resolve();
-      if (errored) return reject(new Error('Google Identity Services script failed to load (blocked)'));
-      if (Date.now() - start > timeoutMs) return reject(new Error('Google Identity Services timed out'));
-      setTimeout(poll, 120);
-    })();
-  });
-}
-
-function ensureGcalClient() {
-  if (gcalTokenClient || !gisReady()) return gcalTokenClient;
-  gcalTokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: GCAL_CONFIG.clientId,
-    scope: GCAL_CONFIG.scope,
-    callback: () => {},
-    error_callback: () => {}
-  });
-  return gcalTokenClient;
-}
-
-function gcalTokenValid() {
-  return S.gcalToken && S.gcalTokenExpiry > Date.now() + 60000;
-}
-
-async function connectGcal({ silent = false } = {}) {
-  try {
-    await waitForGis();
-  } catch (e) {
-    console.error('GIS load failed:', e);
-    showGisBlockedHelp();
-    return;
+async function fetchMeetingsJson() {
+  // Cache-buster so we always see the newest commit from the Action.
+  const url = `${MEETINGS_JSON_URL}?t=${Date.now()}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (res.status === 404) {
+    // meetings.json not yet committed — Action may not have run yet
+    return { events: [], generatedAt: null, missing: true };
   }
-  ensureGcalClient();
-  if (!gcalTokenClient) {
-    toast('Could not initialize Google client', 'error');
-    return;
-  }
-  return new Promise((resolve) => {
-    gcalTokenClient.callback = async (resp) => {
-      if (resp.error) {
-        if (!silent) toast('Calendar connect failed: ' + resp.error, 'error');
-        resolve(false);
-        return;
-      }
-      S.gcalToken = resp.access_token;
-      S.gcalTokenExpiry = Date.now() + (resp.expires_in || 3600) * 1000;
-      S.gcalStatus = 'connected';
-      localStorage.setItem('gcalToken', S.gcalToken);
-      localStorage.setItem('gcalTokenExpiry', String(S.gcalTokenExpiry));
-      await refreshMeetings();
-      if (!silent) toast('📅 Calendar connected ✓', 'success');
-      resolve(true);
-    };
-    gcalTokenClient.error_callback = (err) => {
-      if (!silent) toast('Calendar auth cancelled', 'error');
-      resolve(false);
-    };
-    gcalTokenClient.requestAccessToken({ prompt: silent ? '' : 'consent' });
-  });
-}
-
-function disconnectGcal() {
-  if (S.gcalToken && gisReady() && google.accounts.oauth2.revoke) {
-    try { google.accounts.oauth2.revoke(S.gcalToken, () => {}); } catch {}
-  }
-  localStorage.removeItem('gcalToken');
-  localStorage.removeItem('gcalTokenExpiry');
-  S.gcalToken = null;
-  S.gcalTokenExpiry = 0;
-  S.gcalStatus = 'disconnected';
-  S.gcalMeetings = [];
-  stopGcalPolling();
-  renderMeetings();
-  toast('Calendar disconnected', 'success');
+  if (!res.ok) throw new Error(`meetings.json ${res.status}`);
+  return res.json();
 }
 
 function getGcalRangeBounds() {
@@ -1921,28 +1813,16 @@ function getGcalRangeBounds() {
 }
 
 async function refreshMeetings() {
-  if (!S.gcalToken) { renderMeetings(); return; }
-  if (!gcalTokenValid()) {
-    const ok = await connectGcal({ silent: true });
-    if (!ok) { renderMeetings(); return; }
-  }
   try {
-    const { start, end } = getGcalRangeBounds();
-    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(start.toISOString())}&timeMax=${encodeURIComponent(end.toISOString())}&singleEvents=true&orderBy=startTime&maxResults=100&showDeleted=false`;
-    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${S.gcalToken}` } });
-    if (res.status === 401) {
-      S.gcalToken = null;
-      S.gcalStatus = 'disconnected';
-      localStorage.removeItem('gcalToken');
-      renderMeetings();
-      return;
-    }
-    if (!res.ok) throw new Error(`GCal ${res.status}: ${await res.text()}`);
-    const data = await res.json();
-    S.gcalMeetings = (data.items || []).filter(e => e.status !== 'cancelled');
-    S.gcalStatus = 'connected';
+    const data = await fetchMeetingsJson();
+    // Client-side filters: the JSON covers ±7 days; renderMeetings slices by
+    // the currently-selected range. Cancelled events are already stripped upstream.
+    S.gcalMeetings = data.events || [];
+    S.gcalGeneratedAt = data.generatedAt || null;
+    S.gcalStatus = data.missing ? 'loading' : 'ready';
   } catch (e) {
-    console.warn('GCal fetch failed', e);
+    console.warn('meetings.json fetch failed', e);
+    S.gcalStatus = 'error';
   }
   renderMeetings();
   updateGcalCountdown();
@@ -1960,7 +1840,7 @@ function setGcalRange(range) {
 function startGcalPolling() {
   stopGcalPolling();
   S.gcalTimer = setInterval(() => {
-    if (document.visibilityState === 'visible' && S.gcalToken) {
+    if (document.visibilityState === 'visible') {
       refreshMeetings().catch(() => {});
     }
   }, GCAL_MEETINGS_POLL_MS);
@@ -1971,12 +1851,10 @@ function stopGcalPolling() {
 }
 
 function getMeetingLink(event) {
+  // meetings.json pre-extracts the meet/zoom/teams URL; fall back to hangoutLink
+  // or a regex scan of location+description for older payloads.
+  if (event.meetLink) return event.meetLink;
   if (event.hangoutLink) return { url: event.hangoutLink, type: 'meet', label: 'Meet' };
-  const entries = event.conferenceData && event.conferenceData.entryPoints;
-  if (entries && entries.length) {
-    const video = entries.find(p => p.entryPointType === 'video');
-    if (video && video.uri) return { url: video.uri, type: 'meet', label: 'Meet' };
-  }
   const text = [event.location || '', event.description || ''].join(' ');
   const patterns = [
     { re: /https?:\/\/[^\s<>"']*zoom\.us\/[^\s<>"']+/i, type: 'zoom', label: 'Zoom' },
@@ -1993,21 +1871,29 @@ function getMeetingLink(event) {
 function renderMeetings() {
   const list = $('#meetingsList');
   const empty = $('#meetingsEmpty');
-  const cta = $('#meetingsConnectCta');
   const nav = $('#gcalRangeNav');
   const rangeLabel = $('#gcalRangeLabel');
   if (!list) return;
 
-  if (S.gcalStatus !== 'connected') {
+  if (S.gcalStatus === 'loading') {
     list.classList.add('hidden');
-    empty.classList.add('hidden');
+    empty.classList.remove('hidden');
     nav.classList.add('hidden');
     rangeLabel.classList.add('hidden');
-    cta.classList.remove('hidden');
+    const emptyText = $('#meetingsEmptyText');
+    if (emptyText) emptyText.textContent = 'Loading meetings…';
+    return;
+  }
+  if (S.gcalStatus === 'error') {
+    list.classList.add('hidden');
+    empty.classList.remove('hidden');
+    nav.classList.add('hidden');
+    rangeLabel.classList.add('hidden');
+    const emptyText = $('#meetingsEmptyText');
+    if (emptyText) emptyText.textContent = 'Could not load meetings.json — the refresh Action may not have run yet. It updates every 15 min.';
     return;
   }
 
-  cta.classList.add('hidden');
   nav.classList.remove('hidden');
   rangeLabel.classList.remove('hidden');
 
@@ -2017,12 +1903,18 @@ function renderMeetings() {
   rangeLabel.textContent = `📅 ${bounds.label} · ${fmtDate(bounds.start)} – ${fmtDate(endVisible)}`;
 
   list.innerHTML = '';
+  // meetings.json covers ±7 days; slice by the active range here.
+  const rangeStart = bounds.start.getTime();
+  const rangeEnd = bounds.end.getTime();
   const events = S.gcalMeetings
-    .filter(e => e.start && (e.start.dateTime || e.start.date))
+    .filter(e => {
+      if (!e.start || !(e.start.dateTime || e.start.date)) return false;
+      const s = new Date(e.start.dateTime || e.start.date).getTime();
+      return s >= rangeStart && s < rangeEnd;
+    })
     .sort((a, b) => {
       const aS = new Date(a.start.dateTime || a.start.date).getTime();
       const bS = new Date(b.start.dateTime || b.start.date).getTime();
-      // For past range, show most recent first (descending); otherwise ascending
       return S.gcalRange === 'past' ? bS - aS : aS - bS;
     });
 
@@ -2125,7 +2017,7 @@ function sanitizeDescription(html) {
 function updateGcalCountdown() {
   const wrap = $('#gcalCountdown');
   if (!wrap) return;
-  if (S.gcalStatus !== 'connected') { wrap.classList.add('hidden'); return; }
+  if (S.gcalStatus !== 'ready') { wrap.classList.add('hidden'); return; }
   const now = Date.now();
   const upcoming = S.gcalMeetings
     .filter(e => e.start && e.start.dateTime)
@@ -2158,26 +2050,14 @@ function startGcalCountdownTicker() {
 }
 
 async function initGcal() {
-  if (S.gcalToken && gcalTokenValid()) {
-    S.gcalStatus = 'connected';
-    renderMeetings();
-    refreshMeetings().catch(() => {});
-    startGcalPolling();
-    startGcalCountdownTicker();
-  } else if (S.gcalToken) {
-    S.gcalToken = null;
-    localStorage.removeItem('gcalToken');
-    renderMeetings();
-  } else {
-    renderMeetings();
-  }
-  refreshGcalMenuLabel();
-}
-
-function refreshGcalMenuLabel() {
-  const btn = document.getElementById('gcalMenuBtn');
-  if (!btn) return;
-  btn.textContent = S.gcalStatus === 'connected' ? '📅 Disconnect Calendar' : '📅 Connect Calendar';
+  // Clear any leftover OAuth state from the old implementation so it doesn't
+  // linger in localStorage indefinitely on users who had connected before.
+  localStorage.removeItem('gcalToken');
+  localStorage.removeItem('gcalTokenExpiry');
+  renderMeetings();
+  refreshMeetings().catch(() => {});
+  startGcalPolling();
+  startGcalCountdownTicker();
 }
 
 /* ========== INIT ========== */

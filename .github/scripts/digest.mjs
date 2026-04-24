@@ -45,6 +45,12 @@ function parseDeadline(body) {
   return isNaN(d.getTime()) ? null : d;
 }
 
+function parseAssignee(body) {
+  if (!body) return '';
+  const m = body.match(/^\s*assignee:\s*(.+?)\s*$/m);
+  return m ? m[1] : '';
+}
+
 function istParts(d) {
   const fmt = new Intl.DateTimeFormat('en-GB', {
     timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
@@ -78,7 +84,7 @@ async function computeStreak() {
   while (true) {
     const batch = await gh(`/repos/${OWNER}/${REPO}/issues?state=closed&per_page=100&page=${page}&labels=quest&since=${since}`);
     if (!batch.length) break;
-    closed.push(...batch.filter(i => !i.pull_request && i.closed_at));
+    closed.push(...batch.filter(i => !i.pull_request && i.closed_at && !parseAssignee(i.body || '')));
     if (batch.length < 100) break;
     page++;
   }
@@ -245,21 +251,30 @@ async function main() {
   const enriched = issues
     .map(i => ({
       issue: i,
-      deadline: parseDeadline(i.body || '')
+      deadline: parseDeadline(i.body || ''),
+      assignee: parseAssignee(i.body || '')
     }))
     .filter(e => e.deadline);
 
   const overdue = [];
   const today = [];
+  const delegated = [];
 
   for (const e of enriched) {
     const dlKey = istParts(e.deadline).dateKey;
+    const isDue = dlKey < todayKey || dlKey === todayKey;
+    if (e.assignee) {
+      // Delegated quests feed their own section — today + overdue only, no XP/streaks.
+      if (isDue) delegated.push(e);
+      continue;
+    }
     if (dlKey < todayKey) overdue.push(e);
     else if (dlKey === todayKey) today.push(e);
   }
 
   overdue.sort((a, b) => a.deadline - b.deadline);
   today.sort((a, b) => a.deadline - b.deadline);
+  delegated.sort((a, b) => a.deadline - b.deadline);
 
   const streak = await computeStreak().catch(() => 0);
   const meetings = await fetchTodayMeetings();
@@ -269,7 +284,7 @@ async function main() {
   msg += '\n';
 
   const hasMeetings = Array.isArray(meetings) && meetings.length > 0;
-  const hasAnything = overdue.length || today.length || hasMeetings;
+  const hasAnything = overdue.length || today.length || delegated.length || hasMeetings;
 
   if (!hasAnything) {
     msg += `🌤️ *No quests or meetings today.*\nA well-earned rest awaits, hero. 🛡️\n\nScribe a new quest when you're ready. ⚔️`;
@@ -291,6 +306,18 @@ async function main() {
         const tags = getTags(e.issue);
         const tagStr = tags.length ? ` _[${tags.join(', ')}]_` : '';
         msg += `• <${e.issue.html_url}|${e.issue.title}> — \`${hhmm}\`${tagStr}\n`;
+      }
+      msg += '\n';
+    }
+    if (delegated.length) {
+      msg += `👥 *DELEGATED (${delegated.length})*\n`;
+      for (const e of delegated) {
+        const dlKey = istParts(e.deadline).dateKey;
+        const isOverdue = dlKey < todayKey;
+        const when = isOverdue
+          ? `*${daysBetween(now, e.deadline)}d overdue*`
+          : `due \`${istParts(e.deadline).hhmm}\``;
+        msg += `• <${e.issue.html_url}|${e.issue.title}> — 👤 ${e.assignee} — ${when}\n`;
       }
       msg += '\n';
     }

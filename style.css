@@ -397,6 +397,16 @@ code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;
   color: #d4c9f0;
 }
 .task-recurring { color: #a78bfa; font-size: 11px; }
+.task-assignee {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(34,197,94,0.18);
+  color: #86efac;
+  border: 1px solid rgba(34,197,94,0.35);
+}
+.tab-count { opacity: 0.7; font-weight: 600; margin-left: 2px; font-size: 12px; }
 .task-notes-wrap {
   display: flex;
   gap: 8px;

@@ -13,7 +13,9 @@ Your life, gamified. A mobile-first RPG task manager that runs on GitHub Pages, 
 - 🏆 **20 Badges** — unlock achievements for various milestones
 - 🏷️ **Tags** — create/edit/delete tags (stored as GitHub Labels)
 - 🔁 **Recurring tasks** — daily / weekly / monthly; auto-regenerates on close
-- 🌅 **Daily 8 AM digest** — Google Chat message listing today's quests + overdue
+- 🌅 **Daily 8 AM digest** — Google Chat message listing today's quests + overdue + delegated
+- 👥 **Delegate quests** — assign a quest to someone else (free-text name). Lives on its own **Delegated** tab, never mixed with your own. Tracking-only — no XP gain/loss for delegated work.
+- 📅 **Meetings panel** — reads `meetings.json` (refreshed every 15 min by GitHub Action from the GCAL_ICAL_URL iCal feed). No OAuth, no tokens, no 1-hour logout loop.
 - 📲 **PWA** — install to home screen on iOS and Android
 - 🎊 **Playful UX** — confetti on close, floating XP pops, level-up modal, sound fx
 
@@ -88,11 +90,14 @@ Or trigger from **Actions tab → Morning Quest Digest → Run workflow**.
 ├── manifest.json           # PWA config
 ├── service-worker.js       # Offline cache
 ├── icons/icon.svg          # App icon
+├── meetings.json           # Auto-refreshed (±7 day window)
 └── .github/
     ├── workflows/
-    │   └── morning-digest.yml   # Daily cron
+    │   ├── morning-digest.yml      # Daily 8 AM cron → Google Chat
+    │   └── refresh-meetings.yml    # Every 15 min → writes meetings.json
     └── scripts/
-        └── digest.mjs           # Digest logic
+        ├── digest.mjs              # Digest: Mine / Delegated / Meetings
+        └── refresh-meetings.mjs    # iCal feed → meetings.json
 ```
 
 ## Troubleshooting

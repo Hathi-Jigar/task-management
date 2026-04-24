@@ -16,7 +16,6 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=VT323&display=swap" />
 <link rel="stylesheet" href="style.css" />
 <script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 <!-- ================= LOGIN ================= -->
@@ -82,20 +81,30 @@
     <div class="main-col">
       <!-- TABS -->
       <nav class="tabs">
-        <button class="tab active" data-tab="all">📋 All</button>
+        <button class="tab active" data-tab="mine">⚔️ Mine <span class="tab-count" id="mineCount"></span></button>
+        <button class="tab" data-tab="delegated">👥 Delegated <span class="tab-count" id="delegatedCount"></span></button>
         <button class="tab" data-tab="done">✅ Done</button>
         <button class="tab" data-tab="badges">🏆 Badges</button>
       </nav>
 
       <!-- CONTENT -->
       <main class="content">
-        <section id="tab-all" class="tab-content active">
+        <section id="tab-mine" class="tab-content active">
           <div class="tag-filter" id="tagFilter"></div>
-          <div id="allList" class="list"></div>
-          <div id="allEmpty" class="empty hidden">
+          <div id="mineList" class="list"></div>
+          <div id="mineEmpty" class="empty hidden">
             <div class="empty-icon">🌤️</div>
             <div class="empty-title">No open quests!</div>
             <div class="empty-sub">Tap + to scribe one and earn XP.</div>
+          </div>
+        </section>
+
+        <section id="tab-delegated" class="tab-content">
+          <div id="delegatedList" class="list"></div>
+          <div id="delegatedEmpty" class="empty hidden">
+            <div class="empty-icon">👥</div>
+            <div class="empty-title">Nothing delegated</div>
+            <div class="empty-sub">Assign a quest to someone in the "Assigned to" field. Tracking only — no XP.</div>
           </div>
         </section>
 
@@ -130,13 +139,6 @@
         </div>
         <div id="gcalRangeLabel" class="gcal-range-label hidden"></div>
 
-        <div id="meetingsConnectCta" class="side-panel-body">
-          <div class="gcal-cta">
-            <div class="gcal-cta-icon">📅</div>
-            <div class="gcal-cta-text">Connect Google Calendar to see today's meetings with one-tap join links.</div>
-            <button class="btn btn-primary btn-small" id="gcalConnectBtn">🔗 Connect Calendar</button>
-          </div>
-        </div>
         <div id="meetingsList" class="side-panel-body meetings-list hidden"></div>
         <div id="meetingsEmpty" class="side-panel-body hidden">
           <div class="gcal-cta">
@@ -165,6 +167,9 @@
     <form id="taskForm">
       <label>Quest Title *</label>
       <input id="taskTitle" type="text" required placeholder="Slay the dragon of procrastination..." maxlength="200" />
+
+      <label>Assigned to <span style="color:#7e72a0;font-weight:400;font-size:12px">(leave empty for yourself)</span></label>
+      <input id="taskAssignee" type="text" placeholder="e.g. Raj Patel" maxlength="80" />
 
       <div class="row">
         <div class="col">
@@ -237,7 +242,6 @@
       <button class="btn btn-ghost" id="changeNameBtn">👤 Change Name</button>
       <button class="btn btn-ghost" id="soundToggleBtn">🔊 Sound: On</button>
       <button class="btn btn-ghost" id="tagManagerOpenBtn">🏷️ Manage Tags</button>
-      <button class="btn btn-ghost" id="gcalMenuBtn">📅 Connect Calendar</button>
       <button class="btn btn-ghost" id="installBtn">📲 Install as App</button>
       <button class="btn btn-ghost danger" id="logoutBtn">🚪 Logout</button>
     </div>
